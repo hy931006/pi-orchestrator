@@ -1,0 +1,242 @@
+"""
+Pi Orchestrator — FastAPI 服务器（纯 API + Web UI，无内嵌 daemon）
+Daemon 作为独立进程运行：python daemon.py
+"""
+import json
+import logging
+from pathlib import Path
+
+from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from pydantic import BaseModel
+
+import database as db
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s [server] %(levelname)s: %(message)s")
+logger = logging.getLogger("server")
+
+db.init_db()
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+app = FastAPI(title="Pi Orchestrator")
+
+
+class CreateTaskRequest(BaseModel):
+    title: str
+    description: str = ""
+    agent_type: str = "auto"
+    repo_path: str = ""
+
+
+# ── Web UI ──
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    return FileResponse(TEMPLATES_DIR / "index.html")
+
+
+# ── Tasks ──
+
+@app.get("/api/tasks")
+async def list_tasks(status: str = Query(None), limit: int = 50, offset: int = 0):
+    tasks = db.list_tasks(status=status, limit=limit, offset=offset)
+    return {"tasks": tasks, "stats": db.get_stats()}
+
+
+@app.get("/api/tasks/{task_id}")
+async def get_task(task_id: str):
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@app.post("/api/tasks")
+async def create_task(req: CreateTaskRequest):
+    task = db.create_task(
+        title=req.title, description=req.description,
+        agent_type=req.agent_type,
+        repo_path=req.repo_path or str(Path.cwd())
+    )
+    logger.info(f"📝 [{task['id']}] {task['title']}")
+    return task
+
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: str):
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404)
+    if task["status"] in ("running", "claimed"):
+        raise HTTPException(status_code=400, detail="Cannot delete running task")
+    with db.get_db() as conn:
+        conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    return {"deleted": task_id}
+
+
+@app.put("/api/tasks/{task_id}/retry")
+async def retry_task(task_id: str):
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404)
+    if task["status"] not in ("failed", "completed", "cancelled"):
+        raise HTTPException(status_code=400)
+    db.clear_cancel(task_id)
+    db.update_task_status(task_id, "queued")
+    db.add_comment(task_id, "🔁 Retry — back to queue", "system")
+    return db.get_task(task_id)
+
+
+@app.put("/api/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """取消任务：queued → 直接取消；claimed/running → 置取消标记，daemon 杀进程"""
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404)
+    status = task["status"]
+    if status == "queued":
+        db.update_task_status(task_id, "cancelled", result="cancelled before start")
+        db.add_comment(task_id, "🛑 Cancelled before start", "system")
+    elif status in ("claimed", "running"):
+        db.request_cancel(task_id)
+        db.add_comment(task_id, "🛑 Cancel requested", "system")
+    else:
+        raise HTTPException(status_code=400, detail=f"Cannot cancel task in status: {status}")
+    return db.get_task(task_id)
+
+
+# ── Agents ──
+
+@app.get("/api/agents")
+async def list_agents():
+    return db.list_agents()
+
+
+@app.post("/api/agents")
+async def create_agent(req: dict):
+    agent = db.create_agent(
+        name=req.get("name", ""),
+        system_prompt=req.get("system_prompt", ""),
+        model=req.get("model", ""),
+        skills=req.get("skills", []),
+        tools=req.get("tools", [])
+    )
+    logger.info(f"🤖 Agent created: {agent['name']}")
+    return agent
+
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent(agent_id: str):
+    agent = db.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404)
+    return agent
+
+
+@app.put("/api/agents/{agent_id}")
+async def update_agent(agent_id: str, req: dict):
+    agent = db.update_agent(agent_id, **req)
+    if not agent:
+        raise HTTPException(status_code=404)
+    return agent
+
+
+@app.delete("/api/agents/{agent_id}")
+async def api_delete_agent(agent_id: str):
+    db.delete_agent(agent_id)
+    return {"deleted": agent_id}
+
+
+# ── Comments ──
+
+@app.get("/api/tasks/{task_id}/comments")
+async def list_comments(task_id: str):
+    return db.list_comments(task_id)
+
+
+@app.post("/api/tasks/{task_id}/comments")
+async def add_comment(task_id: str, req: dict):
+    c = db.add_comment(task_id, req.get("content", ""), req.get("author", "user"))
+    logger.info(f"💬 Comment on [{task_id}]: {c['content'][:60]}")
+    return c
+
+
+# ── Task lifecycle ──
+
+@app.put("/api/tasks/{task_id}/block")
+async def block_task(task_id: str, req: dict = None):
+    reason = (req or {}).get("reason", "")
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404)
+    # 阻塞一个正在执行的任务时，同时请求取消其进程
+    if task["status"] in ("claimed", "running"):
+        db.request_cancel(task_id)
+    db.block_task(task_id, reason)
+    db.add_comment(task_id, f"🚫 Blocked: {reason}" if reason else "🚫 Blocked", "system")
+    return db.get_task(task_id)
+
+
+@app.put("/api/tasks/{task_id}/unblock")
+async def api_unblock_task(task_id: str):
+    db.unblock_task(task_id)
+    db.add_comment(task_id, "✅ Unblocked — back to queue", "system")
+    return db.get_task(task_id)
+
+
+# ── Runtimes ──
+
+@app.get("/api/runtimes")
+async def list_runtimes():
+    import shutil
+    agents = []
+    for name, binary in [("pi", "pi"), ("omp", "omp")]:
+        path = shutil.which(binary)
+        if path:
+            agents.append({"name": name, "binary": binary, "path": path})
+    return {"local_agents": agents, "registered_runtimes": db.list_runtimes()}
+
+
+# ── Stats ──
+
+@app.get("/api/stats")
+async def get_stats():
+    return db.get_stats()
+
+
+# ── SSE ──
+
+@app.get("/api/stream")
+async def stream(request: Request):
+    import asyncio
+    from fastapi.responses import StreamingResponse
+
+    async def events():
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                tasks = db.list_tasks(limit=20)
+                stats = db.get_stats()
+                yield f"data: {json.dumps({'tasks': tasks, 'stats': stats}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"})
+
+
+# ── Health ──
+
+@app.get("/health")
+async def health():
+    import shutil
+    agents = sum(1 for b in ["pi", "omp"] if shutil.which(b))
+    return {"status": "ok", "agents": agents}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8020, log_level="info")

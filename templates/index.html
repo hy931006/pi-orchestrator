@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Orchestrator</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-card: #161b22;
+            --bg-input: #21262d;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d2991d;
+            --purple: #a371f7;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        h1 span { font-size: 0.85rem; color: var(--text-dim); font-weight: normal; }
+
+        /* Stats bar */
+        .stats {
+            display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+        }
+        .stat {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 18px;
+            min-width: 100px;
+            text-align: center;
+        }
+        .stat .num { font-size: 1.6rem; font-weight: 700; }
+        .stat .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat.queued .num { color: var(--yellow); }
+        .stat.running .num { color: var(--accent); }
+        .stat.completed .num { color: var(--green); }
+        .stat.failed .num { color: var(--red); }
+
+        /* Create form */
+        .create-form {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 24px;
+        }
+        .create-form h2 { font-size: 1rem; margin-bottom: 12px; }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .form-row input, .form-row textarea {
+            flex: 1;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .form-row input:focus, .form-row textarea:focus {
+            border-color: var(--accent);
+        }
+        .form-row textarea { resize: vertical; min-height: 60px; }
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { opacity: 0.9; }
+        button.danger { background: var(--red); }
+        button.small { padding: 4px 10px; font-size: 0.8rem; }
+
+        /* Task list */
+        .task-list-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px;
+        }
+        .filter-btns { display: flex; gap: 6px; }
+        .filter-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+        .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+
+        .task-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .task-card:hover { border-color: var(--accent); }
+        .task-card .header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            gap: 12px;
+        }
+        .task-card .title { font-weight: 600; font-size: 0.95rem; }
+        .task-card .meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
+        .task-card .log-preview {
+            margin-top: 10px;
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.78rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--text-dim);
+            display: none;
+        }
+        .task-card.expanded .log-preview { display: block; }
+
+        /* Status badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .badge-queued { background: rgba(210,153,29,0.15); color: var(--yellow); }
+        .badge-claimed { background: rgba(163,113,247,0.15); color: var(--purple); }
+        .badge-running { background: rgba(88,166,255,0.15); color: var(--accent); }
+        .badge-completed { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-failed { background: rgba(248,81,73,0.15); color: var(--red); }
+
+        /* Agent status */
+        .agent-bar {
+            display: flex; gap: 8px; align-items: center;
+            margin-bottom: 20px; font-size: 0.82rem; color: var(--text-dim);
+        }
+        .agent-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .agent-dot.online { background: var(--green); }
+        .agent-dot.offline { background: var(--red); }
+
+        /* Loading */
+        .loading { text-align: center; color: var(--text-dim); padding: 40px; }
+
+        /* Empty state */
+        .empty { text-align: center; color: var(--text-dim); padding: 60px 20px; }
+        .empty .icon { font-size: 3rem; margin-bottom: 10px; }
+
+        /* Pulse animation for running tasks */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse { animation: pulse 2s infinite; }
+        .badge-blocked { background: rgba(248,81,73,0.15); color: var(--red); text-decoration:line-through; }
+        .badge-cancelled { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+        .stat.blocked .num { color: var(--red); }
+
+        .task-actions { display: flex; gap: 6px; }
+    </style>
+</head>
+<body>
+    <h1>⚙️ Pi Orchestrator <span>— Agent 任务调度器</span></h1>
+
+    <!-- Agent 状态栏 -->
+    <div class="agent-bar" id="agent-bar">
+        加载中...
+    </div>
+
+    <!-- 统计面板 -->
+    <div class="stats" id="stats">
+        <div class="stat queued"><div class="num">-</div><div class="label">排队</div></div>
+        <div class="stat running"><div class="num">-</div><div class="label">运行中</div></div>
+        <div class="stat completed"><div class="num">-</div><div class="label">已完成</div></div>
+        <div class="stat failed"><div class="num">-</div><div class="label">失败</div></div>
+        <div class="stat blocked"><div class="num">-</div><div class="label">阻塞</div></div>
+    </div>
+
+    <!-- Agent 管理面板 -->
+    <div class="create-form" id="agent-panel">
+        <h2>🤖 Agent 管理 <button class="small" onclick="toggleAgentPanel()" style="float:right">收起</button></h2>
+        <div id="agent-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"></div>
+        <div class="form-row">
+            <input type="text" id="agent-name" placeholder="Agent 名称" style="flex:1" />
+            <input type="text" id="agent-model" placeholder="模型 (可选，如 deepseek/deepseek-v4-flash)" style="flex:1" />
+            <button onclick="createAgent()" style="flex-shrink:0">创建 Agent</button>
+        </div>
+        <div class="form-row">
+            <textarea id="agent-prompt" placeholder="System Prompt — 定义 Agent 的人格和能力" style="min-height:40px;"></textarea>
+        </div>
+    </div>
+
+    <!-- 创建任务表单 -->
+    <div class="create-form">
+        <h2>📝 新建任务</h2>
+        <div class="form-row">
+            <input type="text" id="task-title" placeholder="任务标题（必填）" />
+            <select id="task-agent" style="background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:0.9rem;">
+                <option value="auto">自动 (无 Agent)</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <textarea id="task-desc" placeholder="任务描述 / Prompt（选填）"></textarea>
+        </div>
+        <div class="form-row">
+            <input type="text" id="task-repo" placeholder="代码仓库路径（留空 = 当前目录）" style="flex:2" />
+            <button onclick="createTask()">创建任务</button>
+        </div>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="task-list-header">
+        <h2>📋 任务列表</h2>
+        <div class="filter-btns">
+            <button class="filter-btn active" onclick="setFilter('')">全部</button>
+            <button class="filter-btn" onclick="setFilter('queued')">排队</button>
+            <button class="filter-btn" onclick="setFilter('running')">运行中</button>
+            <button class="filter-btn" onclick="setFilter('completed')">已完成</button>
+            <button class="filter-btn" onclick="setFilter('failed')">失败</button>
+            <button class="filter-btn" onclick="setFilter('blocked')">阻塞</button>
+            <button class="filter-btn" onclick="setFilter('cancelled')">已取消</button>
+        </div>
+    </div>
+
+    <div id="task-list">
+        <div class="loading">⏳ 加载中...</div>
+    </div>
+
+    <script>
+        // ────────────────────────────────
+        // 状态
+        // ────────────────────────────────
+        let currentFilter = '';
+        let tasks = [];
+        let expandedTasks = new Set();  // 记录展开状态，避免 SSE 刷新时重置
+
+        // ────────────────────────────────
+        // SSE 实时流
+        // ────────────────────────────────
+        const evtSource = new EventSource('/api/stream');
+        evtSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (currentFilter) {
+                tasks = data.tasks.filter(t => t.status === currentFilter);
+            } else {
+                tasks = data.tasks;
+            }
+            renderStats(data.stats);
+            renderTasks();
+        };
+        evtSource.onerror = function() {
+            console.log('SSE connection lost, will retry...');
+        };
+
+        // ────────────────────────────────
+        // Agent 状态（轮询）
+        // ────────────────────────────────
+        async function refreshAgents() {
+            try {
+                const res = await fetch('/api/runtimes');
+                const data = await res.json();
+                const bar = document.getElementById('agent-bar');
+                const agents = data.local_agents || [];
+                const runtimes = data.registered_runtimes || [];
+                const onlineCount = runtimes.filter(r => r.is_online).length;
+
+                let html = '';
+                if (agents.length === 0) {
+                    html = '<span class="agent-dot offline"></span> ⚠️ 未检测到 Pi/omp CLI';
+                } else {
+                    html = agents.map(a => {
+                        const rt = runtimes.find(r => r.agent_type === a.name);
+                        const isOnline = rt && rt.is_online;
+                        return `<span class="agent-dot ${isOnline ? 'online' : 'offline'}"></span> ${a.name}`;
+                    }).join(' ');
+                }
+                html += ` &nbsp;|&nbsp; 🖥️ Daemon: ${onlineCount > 0 ? '🟢在线' : '🔴离线'}`;
+                bar.innerHTML = html;
+            } catch(e) {}
+        }
+        refreshAgents();
+        setInterval(refreshAgents, 15000);
+
+        // ────────────────────────────────
+        // 渲染
+        // ────────────────────────────────
+        function renderStats(stats) {
+            document.querySelector('.stat.queued .num').textContent = stats.queued;
+            document.querySelector('.stat.running .num').textContent = stats.running;
+            document.querySelector('.stat.completed .num').textContent = stats.completed;
+            document.querySelector('.stat.failed .num').textContent = stats.failed;
+            document.querySelector('.stat.blocked .num').textContent = stats.blocked;
+        }
+
+        function renderTasks() {
+            const container = document.getElementById('task-list');
+            if (tasks.length === 0) {
+                container.innerHTML = '<div class="empty"><div class="icon">📭</div>暂无任务</div>';
+                return;
+            }
+
+            container.innerHTML = tasks.map(t => `
+                <div class="task-card${expandedTasks.has(t.id) ? ' expanded' : ''}" id="task-${t.id}" onclick="toggleTask('${t.id}')">
+                    <div class="header">
+                        <div>
+                            <div class="title">${esc(t.title)}</div>
+                            <div class="meta">
+                                ${t.id} · ${t.agent_type || 'auto'} · ${timeAgo(t.created_at)}${t.worktree_path ? ' · ' + t.worktree_path.split('/').pop() : ''}
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span class="badge badge-${t.status} ${t.status === 'running' ? 'pulse' : ''}">${t.status}</span>
+                            <div class="task-actions" onclick="event.stopPropagation()">
+                                ${t.status === 'queued' || t.status === 'running' || t.status === 'claimed' ? `<button class="small" onclick="cancelTask('${t.id}')">🛑</button>` : ''}
+                                ${t.status !== 'running' && t.status !== 'claimed' && t.status !== 'blocked' ? `<button class="small" onclick="blockTask('${t.id}')">🚫</button>` : ''}
+                                ${t.status === 'blocked' ? `<button class="small" onclick="unblockTask('${t.id}')">🔓</button>` : ''}
+                                ${t.status === 'failed' || t.status === 'completed' || t.status === 'cancelled' ? `<button class="small" onclick="retryTask('${t.id}')">🔄</button>` : ''}
+                                ${t.status !== 'running' && t.status !== 'claimed' ? `<button class="small danger" onclick="deleteTask('${t.id}')">🗑</button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-preview" id="log-${t.id}">${t.log ? esc(t.log) : '<em>等待执行...</em>'}</div>
+                    <div class="comments-section" id="comments-${t.id}" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;"></div>
+                </div>
+            `).join('');
+        }
+
+        // ────────────────────────────────
+        // 交互
+        // ────────────────────────────────
+        function toggleTask(taskId) {
+            const card = document.getElementById('task-' + taskId);
+            if (!card) return;
+            card.classList.toggle('expanded');
+            if (card.classList.contains('expanded')) {
+                expandedTasks.add(taskId);
+                loadComments(taskId);
+            } else {
+                expandedTasks.delete(taskId);
+            }
+        }
+
+        function setFilter(status) {
+            currentFilter = status;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        async function createTask() {
+            const title = document.getElementById('task-title').value.trim();
+            const desc = document.getElementById('task-desc').value.trim();
+            const repo = document.getElementById('task-repo').value.trim();
+            const agentId = document.getElementById('task-agent').value;
+
+            if (!title) {
+                alert('请输入任务标题');
+                return;
+            }
+
+            const body = { title, description: desc, agent_type: agentId };
+            if (repo) body.repo_path = repo;
+
+            try {
+                const res = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    document.getElementById('task-title').value = '';
+                    document.getElementById('task-desc').value = '';
+                }
+            } catch(e) {
+                alert('创建失败: ' + e.message);
+            }
+        }
+
+        // ── Agent 管理 ──
+        async function loadAgents() {
+            try {
+                const res = await fetch('/api/agents');
+                const agents = await res.json();
+                const list = document.getElementById('agent-list');
+                list.innerHTML = agents.filter(a => a.is_active).map(a =>
+                    `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;min-width:180px;">
+                        <b>${esc(a.name)}</b>
+                        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px;">${esc(a.system_prompt || '无 prompt').substring(0,60)}</div>
+                        <div style="margin-top:4px;">
+                            <button class="small" onclick="deleteAgent('${a.id}')">🗑</button>
+                        </div>
+                    </div>`
+                ).join('') || '<span style="color:var(--text-dim)">暂无 Agent</span>';
+
+                // 更新任务表单的 agent 下拉
+                const sel = document.getElementById('task-agent');
+                sel.innerHTML = '<option value="auto">自动 (无 Agent)</option>' +
+                    agents.filter(a => a.is_active).map(a =>
+                        `<option value="${a.id}">${esc(a.name)}</option>`
+                    ).join('');
+            } catch(e) {}
+        }
+
+        async function createAgent() {
+            const name = document.getElementById('agent-name').value.trim();
+            const prompt = document.getElementById('agent-prompt').value.trim();
+            const model = document.getElementById('agent-model').value.trim();
+            if (!name) { alert('请输入 Agent 名称'); return; }
+            try {
+                await fetch('/api/agents', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, system_prompt: prompt, model})
+                });
+                document.getElementById('agent-name').value = '';
+                document.getElementById('agent-prompt').value = '';
+                document.getElementById('agent-model').value = '';
+                loadAgents();
+            } catch(e) { alert('创建失败: ' + e.message); }
+        }
+
+        async function deleteAgent(id) {
+            if (!confirm('确定删除此 Agent？')) return;
+            try { await fetch(`/api/agents/${id}`, {method:'DELETE'}); loadAgents(); } catch(e) {}
+        }
+
+        // ── Comments ──
+        async function loadComments(taskId) {
+            const el = document.getElementById('comments-' + taskId);
+            if (!el) return;
+            el.style.display = 'block';
+            try {
+                const res = await fetch(`/api/tasks/${taskId}/comments`);
+                const comments = await res.json();
+                el.innerHTML = (comments || []).map(c =>
+                    `<div style="font-size:0.8rem;padding:4px 0;border-bottom:1px solid var(--border);">
+                        <b>${esc(c.author)}</b> <span style="color:var(--text-dim)">${timeAgo(c.created_at)}</span>
+                        <div>${esc(c.content)}</div>
+                    </div>`
+                ).join('') + `
+                    <div style="display:flex;gap:6px;margin-top:8px;">
+                        <input id="comment-input-${taskId}" placeholder="添加评论..." style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:0.8rem;" />
+                        <button class="small" onclick="addComment('${taskId}')">发送</button>
+                    </div>`;
+            } catch(e) {}
+        }
+
+        async function addComment(taskId) {
+            const input = document.getElementById('comment-input-' + taskId);
+            const content = input.value.trim();
+            if (!content) return;
+            try {
+                await fetch(`/api/tasks/${taskId}/comments`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({content, author: 'user'})
+                });
+                input.value = '';
+                loadComments(taskId);
+            } catch(e) {}
+        }
+
+        async function blockTask(taskId) {
+            const reason = prompt('阻塞原因（可选）:');
+            if (reason === null) return;
+            try { await fetch(`/api/tasks/${taskId}/block`, {
+                method:'PUT', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({reason: reason || ''})
+            }); } catch(e) {}
+        }
+
+        async function unblockTask(taskId) {
+            try { await fetch(`/api/tasks/${taskId}/unblock`, {method:'PUT'}); } catch(e) {}
+        }
+
+        function toggleAgentPanel() {
+            const panel = document.getElementById('agent-list');
+            panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        loadAgents();
+        setInterval(loadAgents, 30000);
+
+        async function retryTask(taskId) {
+            try {
+                await fetch(`/api/tasks/${taskId}/retry`, { method: 'PUT' });
+            } catch(e) {}
+        }
+
+        async function cancelTask(taskId) {
+            if (!confirm('确定取消此任务？运行中的进程将被终止。')) return;
+            try {
+                await fetch(`/api/tasks/${taskId}/cancel`, { method: 'PUT' });
+            } catch(e) {}
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('确定删除此任务？')) return;
+            try {
+                await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+            } catch(e) {}
+        }
+
+        // ────────────────────────────────
+        // 工具函数
+        // ────────────────────────────────
+        function esc(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function timeAgo(dateStr) {
+            if (!dateStr) return '';
+            // SQLite stores local time 'YYYY-MM-DD HH:MM:SS'
+            const d = new Date(dateStr.replace(' ', 'T'));
+            const now = new Date();
+            const diff = Math.floor((now - d) / 1000);
+            if (diff < 0) return '刚刚';
+            if (diff < 60) return `${diff}秒前`;
+            if (diff < 3600) return `${Math.floor(diff/60)}分钟前`;
+            if (diff < 86400) return `${Math.floor(diff/3600)}小时前`;
+            return dateStr.slice(0, 16);
+        }
+    </script>
+</body>
+</html>
