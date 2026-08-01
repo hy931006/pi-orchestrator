@@ -1,0 +1,177 @@
+# 门控规则定义 — wf-001 Stage 2 (design)
+#
+# ⚠️ 同步: 02-gate_check.py 通过 yaml.safe_load 真解析本文件。
+#   改本文件即改检查行为——两者自动同步。
+#
+# machine_checks 字段（human 类型专用）：纯 token 列表。
+#   每个 token 在报告中存在 = 预检通过；缺失 = 提示人审关注。
+
+schema_version: 1
+
+checks:
+  # ═══════ 结构完整性 (structure) ═══════
+  - id: D1
+    type: structure
+    severity: blocker
+    target: 02-design-report.md
+    rule: 文件存在且非空
+
+  - id: D2
+    type: structure
+    severity: blocker
+    target: 02-design-report.md
+    rule: 10 个必备章节标题齐全
+    expected_sections:
+      - "设计目标与约束"
+      - "架构总览"
+      - "数据库设计"
+      - "工作流模板"
+      - "阶段执行模型"
+      - "门控引擎设计"
+      - "QA 集成设计"
+      - "人工审批"
+      - "API 端点扩展"
+      - "数据迁移策略"
+
+  - id: D3
+    type: structure
+    severity: blocker
+    target: 02-design-report.md
+    rule: 风险矩阵含 Stage 2 新增 R7/R8/R9/R10 条目
+    expected_sections:
+      - "R7"
+      - "R8"
+      - "R9"
+      - "R10"
+
+  - id: D4
+    type: structure
+    severity: blocker
+    target: 02-design-report.md
+    rule: 附录环境快照章存在
+    expected_sections:
+      - "环境状态快照"
+
+  # ═══════ 交叉引用 (cross_ref) ═══════
+  - id: D5
+    type: cross_ref
+    severity: blocker
+    target: 02-design-report.md
+    rule: 包含上游 Stage 1 闭合 commit hash 47e3a49
+    expected_tokens:
+      - "47e3a49"
+
+  - id: D6
+    type: cross_ref
+    severity: blocker
+    target: 02-design-report.md
+    rule: 7 项延期决策 D1-D7 全部有显式答案
+    expected_tokens:
+      - "D1"
+      - "D2"
+      - "D3"
+      - "D4"
+      - "D5"
+      - "D6"
+      - "D7"
+
+  - id: D7
+    type: cross_ref
+    severity: warning
+    target: 02-design-report.md
+    rule: Q1-Q10 与设计相关标记仍可追踪
+    expected_tokens:
+      - "Q6"
+      - "Q9"
+
+  # ═══════ 内容质量 (content) ═══════
+  - id: D8
+    type: content
+    severity: warning
+    target: 02-design-report.md
+    rule: 无 TODO/TBD/FIXME/待定 占位符
+
+  - id: D9
+    type: content
+    severity: warning
+    target: 02-design-report.md
+    rule: 正文 ≥ 5000 中文字符（设计规格应详尽）
+    min_chars: 5000
+
+  # ═══════ YAML 可解析性 (yaml_parse) ═══════
+  # D10 验证 §4.2 工作流模板 schema 代码块可被 yaml.safe_load
+  - id: D10
+    type: yaml_parse
+    severity: blocker
+    target: 02-design-report.md
+    rule: §4.2 工作流模板 schema 代码块可被 yaml.safe_load 解析
+    yaml_block_index: 0
+
+  # D11 验证 §4.3 最小二阶段模板可被 yaml.safe_load
+  - id: D11
+    type: yaml_parse
+    severity: blocker
+    target: 02-design-report.md
+    rule: §4.3 最小二阶段模板代码块可被 yaml.safe_load 解析
+    yaml_block_index: 1
+
+  # D12 验证 §7.3 QA 自定义规则可被 yaml.safe_load
+  # 注: 索引 2 = §6.1 gate 示例 (门控规则格式), 索引 3 = §7.3 qa-rules
+  # yaml_block_index 按报告中出现顺序 0-based 编号
+  - id: D12
+    type: yaml_parse
+    severity: warning
+    target: 02-design-report.md
+    rule: §7.3 QA 自定义规则代码块可被 yaml.safe_load 解析
+    yaml_block_index: 3
+
+  # ═══════ 人工审批 (human) ═══════
+  - id: H1
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "⚠️ 范围偏离: 用户确认 SonarQube → ruff/mypy/checkstyle JAR 替换方案。这是对 Stage 1 Q7 要求的变更——Stage 1 要求 sonar/checkstyle 扫描，因环境探测无 sonar-scanner/checkstyle，降级为 ruff+mypy+checkstyle JAR"
+    machine_checks:
+      - "ruff"
+      - "mypy"
+      - "checkstyle"
+
+  - id: H2
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "用户批准整体架构（新增 3 模块 + 1 表 + 5 列 + 10 端点 + 审批面板），认可 Stage 3 可据此拆解为 bite-size 任务"
+    machine_checks:
+      - "workflow.py"
+      - "gate.py"
+      - "qa.py"
+      - "workflow_runs"
+
+  - id: H3
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "用户认可「DB 不索引产物、纯文件系统 + git 追溯」的产物存储策略（对齐 Q6）"
+    machine_checks:
+      - "文件系统"
+      - "git commit"
+      - "不建 DB 索引"
+
+  - id: H4
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "用户接受附录环境快照中的工具链状态（ruff/mypy 未安装但已纳入 requirements.txt 规划）"
+    machine_checks:
+      - "ruff"
+      - "mypy"
+      - "checkstyle"
+
+  - id: H5
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "⚠️ 已知缺陷: E2E 测试项数（README 声称 16 项）仍未在本环境核实，需在 Stage 4 实施后验证。用户必须显式 acknowledge 这一事实"
+    machine_checks:
+      - "16 项"
+      - "未核实"
