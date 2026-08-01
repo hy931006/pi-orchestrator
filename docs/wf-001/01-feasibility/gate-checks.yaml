@@ -1,0 +1,93 @@
+# 门控规则定义 — wf-001 Stage 1 (feasibility)
+# 
+# Schema version 1. 每项含：id / type(structure|content|cross_ref) / severity(blocker|warning)
+#   / target / rule / evidence_required
+#
+# ⚠️ 同步警告: 本文件为规则规格。gate_check.py 为硬编码实现。
+#    改规则须两处同步: 本文件(规格) + gate_check.py(实现)。二者不自动同步。
+# 
+# type 语义:
+#   structure  — 文件存在、章节标题等结构完整性
+#   content    — 文本质量（占位符、最小长度）
+#   cross_ref  — 与其他 artifact 的交叉引用一致性
+#
+# severity 语义:
+#   blocker — 不通过则阻止流转（机器+人工）
+#   warning — 警告但不禁行
+
+schema_version: 1
+
+checks:
+  # ─── 结构完整性 (structure) ───
+  - id: F1
+    type: structure
+    severity: blocker
+    target: 01-feasibility-report.md
+    rule: 文件存在且非空
+    evidence_required: stat 文件大小 > 0
+
+  - id: F2
+    type: structure
+    severity: blocker
+    target: 01-feasibility-report.md
+    rule: 5 个必须章节标题齐全
+    evidence_required: grep 匹配 "现状分析" "需求分析" "技术方案" "风险矩阵" "结论"
+
+  - id: F3
+    type: structure
+    severity: blocker
+    target: 01-feasibility-report.md
+    rule: 风险矩阵包含 R1(pytest) / R2(sonar-scanner) / R3(checkstyle) 三条环境缺失记录
+    evidence_required: grep 匹配 "pytest" "sonar-scanner" "checkstyle" 各至少 1 次出现在风险矩阵章节
+
+  # ─── 内容质量 (content) ───
+  - id: F4
+    type: content
+    severity: warning
+    target: 01-feasibility-report.md
+    rule: 无 TODO / TBD / FIXME / 待定 等占位符
+    evidence_required: grep -v 不匹配任何占位符模式
+
+  - id: F5
+    type: content
+    severity: warning
+    target: 01-feasibility-report.md
+    rule: 正文 ≥ 2000 字（中文字符粗略统计）
+    evidence_required: 中文字符计数 ≥ 2000
+
+  # ─── 交叉引用 (cross_ref) ───
+  - id: F6
+    type: cross_ref
+    severity: blocker
+    target: 01-feasibility-report.md
+    rule: Q1-Q10 全部 10 个决策点有对应记录
+    evidence_required: grep 匹配 "Q1"~"Q10" 各至少 1 次
+
+  - id: F7
+    type: cross_ref
+    severity: warning
+    target: 01-feasibility-report.md
+    rule: 基线 commit hash (8efdf07) 在报告中明确标注
+    evidence_required: grep "8efdf07"
+
+  # ─── 人工审批 (human) — 机器检查不覆盖 ───
+  - id: H1
+    type: structure
+    severity: blocker
+    target: 人工
+    rule: 用户确认 Q1-Q10 需求转述准确
+    evidence_required: 用户在 gate-result.md 填写 human_review_decision=approved
+
+  - id: H2
+    type: content
+    severity: blocker
+    target: 人工
+    rule: 用户接受环境风险清单（R1/R2/R3）
+    evidence_required: 用户在 gate-result.md 填写 human_review_decision=approved
+
+  - id: H3
+    type: content
+    severity: blocker
+    target: 人工
+    rule: 用户批准「扩展 pi-orchestrator」技术方向
+    evidence_required: 用户在 gate-result.md 填写 human_review_decision=approved
