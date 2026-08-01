@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |------|------|
 | 机器自动检查 | **PASS** |
-| 人工审批 | **PENDING (3 items awaiting review)** |
+| 人工审批 | **APPROVED (3/3, Young He @ 2026-08-01)** |
 
 ✅ 自动检查：7 项通过, 0 block, 0 warn
 
@@ -37,9 +37,9 @@
 
 | ID | 严重度 | 规则 | 审批决定 | 审批人 | 审批时间 |
 |----|--------|------|---------|--------|---------|
-| H1 | blocker | 用户确认 Q1-Q10 需求转述准确 | `<待填写>` | `<待填写>` | `<待填写>` |
-| H2 | blocker | 用户接受环境风险清单（R1/R2/R3） | `<待填写>` | `<待填写>` | `<待填写>` |
-| H3 | blocker | 用户批准「扩展 pi-orchestrator」技术方向 | `<待填写>` | `<待填写>` | `<待填写>` |
+| H1 | blocker | 用户确认 Q1-Q10 需求转述准确 | approved | Young He | 2026-08-01 |
+| H2 | blocker | 用户接受环境风险清单（R1/R2/R3） | approved | Young He | 2026-08-01 |
+| H3 | blocker | 用户批准「扩展 pi-orchestrator」技术方向 | approved | Young He | 2026-08-01 |
 
 ---
 
