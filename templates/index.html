@@ -357,6 +357,54 @@
             border: none; border-radius: 4px;
             padding: 6px; font-size: 0.78rem; cursor: pointer;
         }
+
+        /* ── Agent 卡片 ── */
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+        }
+        .agent-card:hover { border-color: var(--accent); }
+        .agent-card-off { opacity: 0.6; }
+        .agent-card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 6px;
+        }
+        .agent-card-header b { font-size: 0.95rem; }
+        .agent-model {
+            font-size: 0.78rem; color: var(--accent); margin-bottom: 4px;
+        }
+        .agent-prompt {
+            font-size: 0.8rem; color: var(--text-dim);
+            background: var(--bg); border-radius: 4px;
+            padding: 8px 10px; margin: 6px 0;
+            max-height: 80px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-all;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+        }
+        .agent-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .agent-field { margin-bottom: 8px; }
+        .agent-field label {
+            display: block; font-size: 0.72rem; color: var(--text-dim); margin-bottom: 3px;
+        }
+        .agent-field input, .agent-field select, .agent-field textarea {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: var(--text);
+            font-size: 0.8rem;
+            outline: none;
+        }
+        .agent-field textarea { resize: vertical; font-family: monospace; }
+        .agent-ref-warn {
+            margin-top: 8px; padding: 6px 10px;
+            background: rgba(210,153,29,0.1); border: 1px solid rgba(210,153,29,0.3);
+            border-radius: 4px; font-size: 0.75rem; color: var(--yellow);
+        }
     </style>
 </head>
 <body>
@@ -369,7 +417,8 @@
     <div class="tabs">
         <button class="tab active" id="tab-tasks" onclick="switchTab('tasks')">📋 任务</button>
         <button class="tab" id="tab-workflows" onclick="switchTab('workflows')">🔀 工作流</button>
-        <button class="tab" id="tab-designer" onclick="switchTab('designer')">🎨 编排器</button>
+        <button class="tab" id="tab-designers" onclick="switchTab('designer')">🎨 编排器</button>
+        <button class="tab" id="tab-agents" onclick="switchTab('agents')">🤖 Agent</button>
     </div>
 
     <!-- ═══════════ 任务面板 ═══════════ -->
@@ -383,21 +432,7 @@
             <div class="stat blocked"><div class="num">-</div><div class="label">阻塞</div></div>
         </div>
 
-        <!-- Agent 管理面板 -->
-        <div class="create-form" id="agent-panel">
-            <h2>🤖 Agent 管理 <button class="small ghost" onclick="toggleAgentPanel()" style="float:right">收起</button></h2>
-            <div id="agent-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"></div>
-            <div class="form-row">
-                <input type="text" id="agent-name" placeholder="Agent 名称" style="flex:1" />
-                <select id="agent-model" style="flex:1.2;">
-                    <option value="">默认模型（pi 配置）</option>
-                </select>
-                <button onclick="createAgent()" style="flex-shrink:0">创建 Agent</button>
-            </div>
-            <div class="form-row">
-                <textarea id="agent-prompt" placeholder="System Prompt — 定义 Agent 的人格和能力" style="min-height:40px;"></textarea>
-            </div>
-        </div>
+        <!-- Agent 管理面板（已独立为 🤖 Agent 标签页） -->
 
         <!-- 创建任务表单 -->
         <div class="create-form">
@@ -460,6 +495,37 @@
             </div>
         </div>
         <div id="wf-list"><div class="loading">⏳ 加载中...</div></div>
+    </div>
+
+    <!-- ═══════════ Agent 管理面板（独立标签页） ═══════════ -->
+    <div class="tab-panel" id="panel-agents">
+        <!-- 创建 Agent 表单 -->
+        <div class="create-form">
+            <h2>🤖 新建 Agent</h2>
+            <div class="form-row">
+                <input type="text" id="agent-name" placeholder="Agent 名称（必填）" style="flex:1" />
+                <select id="agent-model" style="flex:1.2;">
+                    <option value="">默认模型（pi 配置）</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <textarea id="agent-prompt" placeholder="System Prompt — 定义 Agent 的人格和能力（必填）" style="min-height:80px;"></textarea>
+            </div>
+            <div class="form-row">
+                <button onclick="createAgent()">创建 Agent</button>
+            </div>
+        </div>
+
+        <!-- Agent 列表 -->
+        <div class="task-list-header">
+            <h2>🤖 Agent 列表</h2>
+            <div class="filter-btns">
+                <button class="filter-btn active" onclick="setAgentFilter('')">全部</button>
+                <button class="filter-btn" onclick="setAgentFilter('active')">启用</button>
+                <button class="filter-btn" onclick="setAgentFilter('inactive')">停用</button>
+            </div>
+        </div>
+        <div id="agent-list"><div class="loading">⏳ 加载中...</div></div>
     </div>
 
     <!-- ═══════════ 编排器面板（拖拽画布） ═══════════ -->
@@ -706,28 +772,50 @@
             } catch(e) { alert('创建失败: ' + e.message); }
         }
 
+        let agentFilter = '';
+
         async function loadAgents() {
             try {
                 const res = await fetch('/api/agents');
                 const agents = await res.json();
                 window.allAgents = agents.filter(a => a.is_active);  // 画布 Agent 下拉用
-                const list = document.getElementById('agent-list');
-                list.innerHTML = agents.filter(a => a.is_active).map(a =>
-                    `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;min-width:180px;">
-                        <b>${esc(a.name)}</b>
-                        ${a.model ? `<div style="font-size:0.7rem;color:var(--accent);margin-top:2px;">🧠 ${esc(a.model)}</div>` : ''}
-                        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px;">${esc(a.system_prompt || '无 prompt').substring(0,60)}</div>
-                        <div style="margin-top:4px;">
-                            <button class="small" onclick="deleteAgent('${a.id}')">🗑</button>
-                        </div>
-                    </div>`
-                ).join('') || '<span style="color:var(--text-dim)">暂无 Agent</span>';
+                // 任务表单 agent 下拉（单任务可绑定 Agent）
                 const sel = document.getElementById('task-agent');
-                sel.innerHTML = '<option value="auto">自动 (无 Agent)</option>' +
-                    agents.filter(a => a.is_active).map(a =>
-                        `<option value="${a.id}">${esc(a.name)}</option>`
-                    ).join('');
+                if (sel) {
+                    sel.innerHTML = '<option value="auto">自动 (无 Agent)</option>' +
+                        agents.filter(a => a.is_active).map(a =>
+                            `<option value="${a.id}">${esc(a.name)}</option>`
+                        ).join('');
+                }
+                // Agent 面板列表
+                const list = document.getElementById('agent-list');
+                if (!list) return;
+                let filtered = agents;
+                if (agentFilter === 'active') filtered = agents.filter(a => a.is_active);
+                if (agentFilter === 'inactive') filtered = agents.filter(a => !a.is_active);
+                list.innerHTML = filtered.map(a => `
+                    <div class="agent-card ${a.is_active ? '' : 'agent-card-off'}" id="agent-card-${a.id}">
+                        <div class="agent-card-header">
+                            <b>${a.is_active ? '🤖' : '💤'} ${esc(a.name)}</b>
+                            <span class="badge ${a.is_active ? 'badge-completed' : 'badge-cancelled'}">${a.is_active ? '启用' : '停用'}</span>
+                        </div>
+                        ${a.model ? `<div class="agent-model">🧠 ${esc(a.model)}</div>` : '<div class="agent-model" style="color:var(--text-dim)">🧠 默认模型</div>'}
+                        <div class="agent-prompt">${esc(a.system_prompt || '（无 prompt）')}</div>
+                        <div class="agent-actions">
+                            <button class="small" onclick="editAgent('${a.id}')">✏️ 编辑</button>
+                            <button class="small ${a.is_active ? 'warn' : ''}" onclick="toggleAgent('${a.id}', ${a.is_active ? 0 : 1})">${a.is_active ? '⏸ 停用' : '▶️ 启用'}</button>
+                            <button class="small danger" onclick="deleteAgent('${a.id}')">🗑 删除</button>
+                        </div>
+                    </div>
+                `).join('') || '<div class="empty"><div class="icon">🤖</div>暂无 Agent</div>';
             } catch(e) {}
+        }
+
+        function setAgentFilter(f) {
+            agentFilter = f;
+            document.querySelectorAll('#panel-agents .filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            loadAgents();
         }
 
         async function createAgent() {
@@ -735,12 +823,18 @@
             const prompt = document.getElementById('agent-prompt').value.trim();
             const model = document.getElementById('agent-model').value.trim();
             if (!name) { alert('请输入 Agent 名称'); return; }
+            if (!prompt) { alert('请输入 System Prompt'); return; }
             try {
-                await fetch('/api/agents', {
+                const res = await fetch('/api/agents', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name, system_prompt: prompt, model})
                 });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('创建失败: ' + (err.detail || res.status));
+                    return;
+                }
                 document.getElementById('agent-name').value = '';
                 document.getElementById('agent-prompt').value = '';
                 document.getElementById('agent-model').value = '';
@@ -748,8 +842,66 @@
             } catch(e) { alert('创建失败: ' + e.message); }
         }
 
+        function editAgent(id) {
+            // 需要全量 agents（含停用）——重新拉取
+            fetch('/api/agents').then(r => r.json()).then(all => {
+                const agent = all.find(x => x.id === id);
+                if (!agent) return;
+                const card = document.getElementById('agent-card-' + id);
+                const modelOpts = '<option value="">默认模型（pi 配置）</option>' +
+                    window.allModels.map(m =>
+                        `<option value="${esc(m)}" ${agent.model === m ? 'selected' : ''}>${esc(m)}</option>`).join('');
+                card.innerHTML = `
+                    <div class="agent-card-header"><b>✏️ 编辑: ${esc(agent.name)}</b></div>
+                    <div class="agent-field"><label>名称</label>
+                        <input id="edit-name-${id}" value="${esc(agent.name)}" /></div>
+                    <div class="agent-field"><label>模型</label>
+                        <select id="edit-model-${id}">${modelOpts}</select></div>
+                    <div class="agent-field"><label>System Prompt</label>
+                        <textarea id="edit-prompt-${id}" style="min-height:90px;">${esc(agent.system_prompt || '')}</textarea></div>
+                    <div class="agent-actions">
+                        <button class="small" onclick="saveAgent('${id}')">💾 保存</button>
+                        <button class="small ghost" onclick="loadAgents()">取消</button>
+                    </div>
+                    ${agent.agent_ref_used ? `<div class="agent-ref-warn">⚠️ 被 ${agent.agent_ref_used} 个工作流模板引用，改名后需同步更新模板</div>` : ''}
+                `;
+            });
+        }
+
+        async function saveAgent(id) {
+            const name = document.getElementById('edit-name-' + id).value.trim();
+            const model = document.getElementById('edit-model-' + id).value.trim();
+            const prompt = document.getElementById('edit-prompt-' + id).value.trim();
+            if (!name) { alert('名称不能为空'); return; }
+            if (!prompt) { alert('System Prompt 不能为空'); return; }
+            try {
+                const res = await fetch(`/api/agents/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, system_prompt: prompt, model})
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('保存失败: ' + (err.detail || res.status));
+                    return;
+                }
+                loadAgents();
+            } catch(e) { alert('保存失败: ' + e.message); }
+        }
+
+        async function toggleAgent(id, active) {
+            try {
+                await fetch(`/api/agents/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({is_active: active === 1})
+                });
+                loadAgents();
+            } catch(e) { alert('操作失败: ' + e.message); }
+        }
+
         async function deleteAgent(id) {
-            if (!confirm('确定删除此 Agent？')) return;
+            if (!confirm('确定删除此 Agent？（引用它的工作流模板将失效）')) return;
             try { await fetch(`/api/agents/${id}`, {method:'DELETE'}); loadAgents(); } catch(e) {}
         }
 
@@ -1046,6 +1198,9 @@
             }
             if (name === 'designer') {
                 loadDesignerTemplateList();
+            }
+            if (name === 'agents') {
+                loadAgents();
             }
         }
 

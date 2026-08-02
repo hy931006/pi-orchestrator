@@ -111,18 +111,38 @@ async def cancel_task(task_id: str):
 
 @app.get("/api/agents")
 async def list_agents():
-    return db.list_agents()
+    """列出所有 Agent（附 agent_ref_used: 被多少工作流模板引用）"""
+    agents = db.list_agents()
+    # 统计模板引用
+    ref_counts = {}
+    try:
+        templates = wf.load_templates()
+        for t in templates.values():
+            for s in t.get("stages", []):
+                ref = s.get("agent_ref")
+                if ref:
+                    ref_counts[ref] = ref_counts.get(ref, 0) + 1
+    except Exception:
+        pass
+    for a in agents:
+        a["agent_ref_used"] = ref_counts.get(a["name"], 0)
+    return agents
 
 
 @app.post("/api/agents")
 async def create_agent(req: dict):
-    agent = db.create_agent(
-        name=req.get("name", ""),
-        system_prompt=req.get("system_prompt", ""),
-        model=req.get("model", ""),
-        skills=req.get("skills", []),
-        tools=req.get("tools", [])
-    )
+    try:
+        agent = db.create_agent(
+            name=req.get("name", ""),
+            system_prompt=req.get("system_prompt", ""),
+            model=req.get("model", ""),
+            skills=req.get("skills", []),
+            tools=req.get("tools", [])
+        )
+    except Exception as e:
+        if "UNIQUE" in str(e):
+            raise HTTPException(status_code=400, detail=f"Agent 名称 '{req.get('name')}' 已存在")
+        raise HTTPException(status_code=400, detail=str(e))
     logger.info(f"🤖 Agent created: {agent['name']}")
     return agent
 

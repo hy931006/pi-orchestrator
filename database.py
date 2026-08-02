@@ -447,9 +447,9 @@ def update_agent(agent_id: str, **kwargs) -> dict:
 
 
 def delete_agent(agent_id: str):
-    """删除 Agent（软删除）"""
+    """物理删除 Agent（彻底移除；被模板引用的 Agent 由 validate_template 拦截）"""
     with get_db() as conn:
-        conn.execute("UPDATE agents SET is_active = 0 WHERE id = ?", (agent_id,))
+        conn.execute("DELETE FROM agents WHERE id = ?", (agent_id,))
 
 
 # ────────────────────────────────
