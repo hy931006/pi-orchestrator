@@ -17,6 +17,7 @@
             --red: #f85149;
             --yellow: #d2991d;
             --purple: #a371f7;
+            --orange: #db6d28;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -31,10 +32,23 @@
         h1 { font-size: 1.5rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
         h1 span { font-size: 0.85rem; color: var(--text-dim); font-weight: normal; }
 
-        /* Stats bar */
-        .stats {
-            display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+        /* ── Tabs ── */
+        .tabs {
+            display: flex; gap: 4px; border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
         }
+        .tab {
+            background: transparent; border: none; color: var(--text-dim);
+            padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+            border-bottom: 2px solid transparent; margin-bottom: -1px;
+            font-weight: 600;
+        }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Stats bar */
+        .stats { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
         .stat {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -49,6 +63,7 @@
         .stat.running .num { color: var(--accent); }
         .stat.completed .num { color: var(--green); }
         .stat.failed .num { color: var(--red); }
+        .stat.blocked .num { color: var(--red); }
 
         /* Create form */
         .create-form {
@@ -60,7 +75,7 @@
         }
         .create-form h2 { font-size: 1rem; margin-bottom: 12px; }
         .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
-        .form-row input, .form-row textarea {
+        .form-row input, .form-row textarea, .form-row select {
             flex: 1;
             background: var(--bg-input);
             border: 1px solid var(--border);
@@ -70,7 +85,7 @@
             font-size: 0.9rem;
             outline: none;
         }
-        .form-row input:focus, .form-row textarea:focus {
+        .form-row input:focus, .form-row textarea:focus, .form-row select:focus {
             border-color: var(--accent);
         }
         .form-row textarea { resize: vertical; min-height: 60px; }
@@ -86,6 +101,8 @@
         }
         button:hover { opacity: 0.9; }
         button.danger { background: var(--red); }
+        button.warn { background: var(--orange); }
+        button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
         button.small { padding: 4px 10px; font-size: 0.8rem; }
 
         /* Task list */
@@ -93,7 +110,7 @@
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 12px;
         }
-        .filter-btns { display: flex; gap: 6px; }
+        .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
         .filter-btn {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -105,7 +122,7 @@
         }
         .filter-btn.active { border-color: var(--accent); color: var(--accent); }
 
-        .task-card {
+        .task-card, .wf-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -114,13 +131,13 @@
             cursor: pointer;
             transition: border-color 0.2s;
         }
-        .task-card:hover { border-color: var(--accent); }
-        .task-card .header {
+        .task-card:hover, .wf-card:hover { border-color: var(--accent); }
+        .task-card .header, .wf-card .header {
             display: flex; justify-content: space-between; align-items: flex-start;
             gap: 12px;
         }
-        .task-card .title { font-weight: 600; font-size: 0.95rem; }
-        .task-card .meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
+        .task-card .title, .wf-card .title { font-weight: 600; font-size: 0.95rem; }
+        .task-card .meta, .wf-card .meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
         .task-card .log-preview {
             margin-top: 10px;
             background: var(--bg);
@@ -137,7 +154,33 @@
         }
         .task-card.expanded .log-preview { display: block; }
 
-        /* Status badges */
+        /* Workflow timeline */
+        .wf-detail { display: none; margin-top: 12px; }
+        .wf-card.expanded .wf-detail { display: block; }
+        .stage-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 12px; border-left: 3px solid var(--border);
+            margin: 6px 0; background: var(--bg); border-radius: 0 6px 6px 0;
+            flex-wrap: wrap;
+        }
+        .stage-row.current { border-left-color: var(--accent); }
+        .stage-row.done { border-left-color: var(--green); }
+        .stage-row .stage-name { font-weight: 600; min-width: 90px; font-size: 0.85rem; }
+        .stage-row .stage-meta { font-size: 0.75rem; color: var(--text-dim); flex: 1; }
+        .stage-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .stage-actions input[type=text] {
+            background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: 4px; padding: 4px 8px; color: var(--text);
+            font-size: 0.78rem; width: 200px; outline: none;
+        }
+        .stage-result {
+            width: 100%; margin-top: 6px; background: var(--bg-card);
+            border-radius: 4px; padding: 8px; font-size: 0.75rem;
+            color: var(--text-dim); white-space: pre-wrap; word-break: break-all;
+            max-height: 150px; overflow-y: auto; font-family: monospace;
+        }
+
+        /* Badges */
         .badge {
             display: inline-block;
             padding: 2px 8px;
@@ -152,114 +195,179 @@
         .badge-running { background: rgba(88,166,255,0.15); color: var(--accent); }
         .badge-completed { background: rgba(63,185,80,0.15); color: var(--green); }
         .badge-failed { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-cancelled { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+        .badge-blocked { background: rgba(248,81,73,0.15); color: var(--red); text-decoration:line-through; }
+        .badge-wf-running { background: rgba(88,166,255,0.15); color: var(--accent); }
+        .badge-wf-completed { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-wf-failed { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-wf-cancelled { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+        .badge-gate-pending { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+        .badge-gate-auto_passed { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-gate-auto_failed { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-gate-approved { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge-gate-rejected { background: rgba(210,153,29,0.15); color: var(--yellow); }
+        .badge-gate-forced { background: rgba(219,109,40,0.15); color: var(--orange); }
+        .badge-gate-waived { background: rgba(163,113,247,0.15); color: var(--purple); }
 
-        /* Agent status */
+        /* Agent bar */
         .agent-bar {
             display: flex; gap: 8px; align-items: center;
             margin-bottom: 20px; font-size: 0.82rem; color: var(--text-dim);
+            flex-wrap: wrap;
         }
         .agent-dot { width: 8px; height: 8px; border-radius: 50%; }
         .agent-dot.online { background: var(--green); }
         .agent-dot.offline { background: var(--red); }
 
-        /* Loading */
         .loading { text-align: center; color: var(--text-dim); padding: 40px; }
-
-        /* Empty state */
         .empty { text-align: center; color: var(--text-dim); padding: 60px 20px; }
         .empty .icon { font-size: 3rem; margin-bottom: 10px; }
 
-        /* Pulse animation for running tasks */
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .pulse { animation: pulse 2s infinite; }
-        .badge-blocked { background: rgba(248,81,73,0.15); color: var(--red); text-decoration:line-through; }
-        .badge-cancelled { background: rgba(139,148,158,0.15); color: var(--text-dim); }
-        .stat.blocked .num { color: var(--red); }
-
         .task-actions { display: flex; gap: 6px; }
+
+        /* Workflow progress bar */
+        .wf-progress { margin-top: 8px; }
+        .progress-track {
+            background: var(--bg); border-radius: 4px; height: 6px; overflow: hidden;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, var(--accent), var(--green));
+            height: 100%; border-radius: 4px; transition: width 0.5s;
+        }
+        .wf-stages-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
     </style>
 </head>
 <body>
-    <h1>⚙️ Pi Orchestrator <span>— Agent 任务调度器</span></h1>
+    <h1>⚙️ Pi Orchestrator <span>— Agent 任务调度器 + 工作流编排</span></h1>
 
     <!-- Agent 状态栏 -->
-    <div class="agent-bar" id="agent-bar">
-        加载中...
+    <div class="agent-bar" id="agent-bar">加载中...</div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab active" id="tab-tasks" onclick="switchTab('tasks')">📋 任务</button>
+        <button class="tab" id="tab-workflows" onclick="switchTab('workflows')">🔀 工作流</button>
     </div>
 
-    <!-- 统计面板 -->
-    <div class="stats" id="stats">
-        <div class="stat queued"><div class="num">-</div><div class="label">排队</div></div>
-        <div class="stat running"><div class="num">-</div><div class="label">运行中</div></div>
-        <div class="stat completed"><div class="num">-</div><div class="label">已完成</div></div>
-        <div class="stat failed"><div class="num">-</div><div class="label">失败</div></div>
-        <div class="stat blocked"><div class="num">-</div><div class="label">阻塞</div></div>
+    <!-- ═══════════ 任务面板 ═══════════ -->
+    <div class="tab-panel active" id="panel-tasks">
+        <!-- 统计面板 -->
+        <div class="stats" id="stats">
+            <div class="stat queued"><div class="num">-</div><div class="label">排队</div></div>
+            <div class="stat running"><div class="num">-</div><div class="label">运行中</div></div>
+            <div class="stat completed"><div class="num">-</div><div class="label">已完成</div></div>
+            <div class="stat failed"><div class="num">-</div><div class="label">失败</div></div>
+            <div class="stat blocked"><div class="num">-</div><div class="label">阻塞</div></div>
+        </div>
+
+        <!-- Agent 管理面板 -->
+        <div class="create-form" id="agent-panel">
+            <h2>🤖 Agent 管理 <button class="small ghost" onclick="toggleAgentPanel()" style="float:right">收起</button></h2>
+            <div id="agent-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"></div>
+            <div class="form-row">
+                <input type="text" id="agent-name" placeholder="Agent 名称" style="flex:1" />
+                <input type="text" id="agent-model" placeholder="模型 (可选，如 deepseek/deepseek-v4-flash)" style="flex:1" />
+                <button onclick="createAgent()" style="flex-shrink:0">创建 Agent</button>
+            </div>
+            <div class="form-row">
+                <textarea id="agent-prompt" placeholder="System Prompt — 定义 Agent 的人格和能力" style="min-height:40px;"></textarea>
+            </div>
+        </div>
+
+        <!-- 创建任务表单 -->
+        <div class="create-form">
+            <h2>📝 新建任务</h2>
+            <div class="form-row">
+                <input type="text" id="task-title" placeholder="任务标题（必填）" />
+                <select id="task-agent" style="flex:0 0 200px;">
+                    <option value="auto">自动 (无 Agent)</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <textarea id="task-desc" placeholder="任务描述 / Prompt（选填）"></textarea>
+            </div>
+            <div class="form-row">
+                <input type="text" id="task-repo" placeholder="代码仓库路径（留空 = 当前目录）" style="flex:2" />
+                <button onclick="createTask()">创建任务</button>
+            </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="task-list-header">
+            <h2>📋 任务列表</h2>
+            <div class="filter-btns">
+                <button class="filter-btn active" onclick="setFilter('')">全部</button>
+                <button class="filter-btn" onclick="setFilter('queued')">排队</button>
+                <button class="filter-btn" onclick="setFilter('running')">运行中</button>
+                <button class="filter-btn" onclick="setFilter('completed')">已完成</button>
+                <button class="filter-btn" onclick="setFilter('failed')">失败</button>
+                <button class="filter-btn" onclick="setFilter('blocked')">阻塞</button>
+                <button class="filter-btn" onclick="setFilter('cancelled')">已取消</button>
+            </div>
+        </div>
+        <div id="task-list"><div class="loading">⏳ 加载中...</div></div>
     </div>
 
-    <!-- Agent 管理面板 -->
-    <div class="create-form" id="agent-panel">
-        <h2>🤖 Agent 管理 <button class="small" onclick="toggleAgentPanel()" style="float:right">收起</button></h2>
-        <div id="agent-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"></div>
-        <div class="form-row">
-            <input type="text" id="agent-name" placeholder="Agent 名称" style="flex:1" />
-            <input type="text" id="agent-model" placeholder="模型 (可选，如 deepseek/deepseek-v4-flash)" style="flex:1" />
-            <button onclick="createAgent()" style="flex-shrink:0">创建 Agent</button>
+    <!-- ═══════════ Workflows 面板 ═══════════ -->
+    <div class="tab-panel" id="panel-workflows">
+        <!-- 创建 workflow 表单 -->
+        <div class="create-form">
+            <h2>🔀 新建工作流</h2>
+            <div class="form-row">
+                <select id="wf-template" style="flex:0 0 220px;"></select>
+                <input type="text" id="wf-title" placeholder="工作流标题（必填）" />
+            </div>
+            <div class="form-row">
+                <input type="text" id="wf-repo" placeholder="代码仓库路径（留空 = 当前目录）" style="flex:2" />
+                <button onclick="createWorkflow()">创建工作流</button>
+            </div>
+            <div class="form-row" id="wf-template-desc" style="font-size:0.8rem;color:var(--text-dim);margin:0;"></div>
         </div>
-        <div class="form-row">
-            <textarea id="agent-prompt" placeholder="System Prompt — 定义 Agent 的人格和能力" style="min-height:40px;"></textarea>
-        </div>
-    </div>
 
-    <!-- 创建任务表单 -->
-    <div class="create-form">
-        <h2>📝 新建任务</h2>
-        <div class="form-row">
-            <input type="text" id="task-title" placeholder="任务标题（必填）" />
-            <select id="task-agent" style="background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:0.9rem;">
-                <option value="auto">自动 (无 Agent)</option>
-            </select>
+        <!-- workflow 列表 -->
+        <div class="task-list-header">
+            <h2>🔀 工作流列表</h2>
+            <div class="filter-btns">
+                <button class="filter-btn active" onclick="setWfFilter('')">全部</button>
+                <button class="filter-btn" onclick="setWfFilter('running')">运行中</button>
+                <button class="filter-btn" onclick="setWfFilter('completed')">已完成</button>
+                <button class="filter-btn" onclick="setWfFilter('failed')">失败</button>
+            </div>
         </div>
-        <div class="form-row">
-            <textarea id="task-desc" placeholder="任务描述 / Prompt（选填）"></textarea>
-        </div>
-        <div class="form-row">
-            <input type="text" id="task-repo" placeholder="代码仓库路径（留空 = 当前目录）" style="flex:2" />
-            <button onclick="createTask()">创建任务</button>
-        </div>
-    </div>
-
-    <!-- 任务列表 -->
-    <div class="task-list-header">
-        <h2>📋 任务列表</h2>
-        <div class="filter-btns">
-            <button class="filter-btn active" onclick="setFilter('')">全部</button>
-            <button class="filter-btn" onclick="setFilter('queued')">排队</button>
-            <button class="filter-btn" onclick="setFilter('running')">运行中</button>
-            <button class="filter-btn" onclick="setFilter('completed')">已完成</button>
-            <button class="filter-btn" onclick="setFilter('failed')">失败</button>
-            <button class="filter-btn" onclick="setFilter('blocked')">阻塞</button>
-            <button class="filter-btn" onclick="setFilter('cancelled')">已取消</button>
-        </div>
-    </div>
-
-    <div id="task-list">
-        <div class="loading">⏳ 加载中...</div>
+        <div id="wf-list"><div class="loading">⏳ 加载中...</div></div>
     </div>
 
     <script>
-        // ────────────────────────────────
+        // ════════════════════════════════════
         // 状态
-        // ────────────────────────────────
+        // ════════════════════════════════════
         let currentFilter = '';
+        let currentWfFilter = '';
         let tasks = [];
-        let expandedTasks = new Set();  // 记录展开状态，避免 SSE 刷新时重置
+        let workflows = [];
+        let wfStagesCache = {};   // run_id → stages[]
+        let expandedTasks = new Set();
+        let expandedWfs = new Set();
 
-        // ────────────────────────────────
+        // ════════════════════════════════════
+        // Tabs
+        // ════════════════════════════════════
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            if (name === 'workflows') {
+                loadTemplates();
+                loadWorkflows();
+            }
+        }
+
+        // ════════════════════════════════════
         // SSE 实时流
-        // ────────────────────────────────
+        // ════════════════════════════════════
         const evtSource = new EventSource('/api/stream');
         evtSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
@@ -270,14 +378,18 @@
             }
             renderStats(data.stats);
             renderTasks();
+            // workflow 面板也随 SSE 刷新（只刷新列表，展开详情用轮询）
+            if (document.getElementById('panel-workflows').classList.contains('active')) {
+                loadWorkflows(true);
+            }
         };
         evtSource.onerror = function() {
             console.log('SSE connection lost, will retry...');
         };
 
-        // ────────────────────────────────
+        // ════════════════════════════════════
         // Agent 状态（轮询）
-        // ────────────────────────────────
+        // ════════════════════════════════════
         async function refreshAgents() {
             try {
                 const res = await fetch('/api/runtimes');
@@ -286,7 +398,6 @@
                 const agents = data.local_agents || [];
                 const runtimes = data.registered_runtimes || [];
                 const onlineCount = runtimes.filter(r => r.is_online).length;
-
                 let html = '';
                 if (agents.length === 0) {
                     html = '<span class="agent-dot offline"></span> ⚠️ 未检测到 Pi/omp CLI';
@@ -304,9 +415,30 @@
         refreshAgents();
         setInterval(refreshAgents, 15000);
 
-        // ────────────────────────────────
-        // 渲染
-        // ────────────────────────────────
+        // ════════════════════════════════════
+        // 工具函数
+        // ════════════════════════════════════
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function timeAgo(t) {
+            if (!t) return '';
+            const d = new Date(t.replace(' ', 'T'));
+            const s = (Date.now() - d.getTime()) / 1000;
+            if (s < 60) return Math.floor(s) + 's 前';
+            if (s < 3600) return Math.floor(s/60) + 'm 前';
+            if (s < 86400) return Math.floor(s/3600) + 'h 前';
+            return Math.floor(s/86400) + 'd 前';
+        }
+        function gateBadge(g) {
+            if (!g) return '';
+            return `<span class="badge badge-gate-${g}">gate:${g}</span>`;
+        }
+
+        // ════════════════════════════════════
+        // 任务面板
+        // ════════════════════════════════════
         function renderStats(stats) {
             document.querySelector('.stat.queued .num').textContent = stats.queued;
             document.querySelector('.stat.running .num').textContent = stats.running;
@@ -321,18 +453,20 @@
                 container.innerHTML = '<div class="empty"><div class="icon">📭</div>暂无任务</div>';
                 return;
             }
-
             container.innerHTML = tasks.map(t => `
                 <div class="task-card${expandedTasks.has(t.id) ? ' expanded' : ''}" id="task-${t.id}" onclick="toggleTask('${t.id}')">
                     <div class="header">
                         <div>
                             <div class="title">${esc(t.title)}</div>
                             <div class="meta">
-                                ${t.id} · ${t.agent_type || 'auto'} · ${timeAgo(t.created_at)}${t.worktree_path ? ' · ' + t.worktree_path.split('/').pop() : ''}
+                                ${t.id} · ${t.agent_type || 'auto'} · ${timeAgo(t.created_at)}
+                                ${t.workflow_run_id ? ` · 🔀 wf:${t.workflow_run_id} stage:${t.stage_key || ''}` : ''}
+                                ${t.worktree_path ? ' · ' + t.worktree_path.split('/').pop() : ''}
                             </div>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;">
                             <span class="badge badge-${t.status} ${t.status === 'running' ? 'pulse' : ''}">${t.status}</span>
+                            ${gateBadge(t.gate_status)}
                             <div class="task-actions" onclick="event.stopPropagation()">
                                 ${t.status === 'queued' || t.status === 'running' || t.status === 'claimed' ? `<button class="small" onclick="cancelTask('${t.id}')">🛑</button>` : ''}
                                 ${t.status !== 'running' && t.status !== 'claimed' && t.status !== 'blocked' ? `<button class="small" onclick="blockTask('${t.id}')">🚫</button>` : ''}
@@ -348,9 +482,6 @@
             `).join('');
         }
 
-        // ────────────────────────────────
-        // 交互
-        // ────────────────────────────────
         function toggleTask(taskId) {
             const card = document.getElementById('task-' + taskId);
             if (!card) return;
@@ -365,7 +496,7 @@
 
         function setFilter(status) {
             currentFilter = status;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#panel-tasks .filter-btn').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
         }
 
@@ -374,15 +505,9 @@
             const desc = document.getElementById('task-desc').value.trim();
             const repo = document.getElementById('task-repo').value.trim();
             const agentId = document.getElementById('task-agent').value;
-
-            if (!title) {
-                alert('请输入任务标题');
-                return;
-            }
-
+            if (!title) { alert('请输入任务标题'); return; }
             const body = { title, description: desc, agent_type: agentId };
             if (repo) body.repo_path = repo;
-
             try {
                 const res = await fetch('/api/tasks', {
                     method: 'POST',
@@ -393,12 +518,9 @@
                     document.getElementById('task-title').value = '';
                     document.getElementById('task-desc').value = '';
                 }
-            } catch(e) {
-                alert('创建失败: ' + e.message);
-            }
+            } catch(e) { alert('创建失败: ' + e.message); }
         }
 
-        // ── Agent 管理 ──
         async function loadAgents() {
             try {
                 const res = await fetch('/api/agents');
@@ -413,8 +535,6 @@
                         </div>
                     </div>`
                 ).join('') || '<span style="color:var(--text-dim)">暂无 Agent</span>';
-
-                // 更新任务表单的 agent 下拉
                 const sel = document.getElementById('task-agent');
                 sel.innerHTML = '<option value="auto">自动 (无 Agent)</option>' +
                     agents.filter(a => a.is_active).map(a =>
@@ -446,7 +566,6 @@
             try { await fetch(`/api/agents/${id}`, {method:'DELETE'}); loadAgents(); } catch(e) {}
         }
 
-        // ── Comments ──
         async function loadComments(taskId) {
             const el = document.getElementById('comments-' + taskId);
             if (!el) return;
@@ -500,51 +619,225 @@
             panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
         }
 
-        loadAgents();
-        setInterval(loadAgents, 30000);
-
-        async function retryTask(taskId) {
-            try {
-                await fetch(`/api/tasks/${taskId}/retry`, { method: 'PUT' });
-            } catch(e) {}
-        }
-
         async function cancelTask(taskId) {
-            if (!confirm('确定取消此任务？运行中的进程将被终止。')) return;
-            try {
-                await fetch(`/api/tasks/${taskId}/cancel`, { method: 'PUT' });
-            } catch(e) {}
+            try { await fetch(`/api/tasks/${taskId}/cancel`, {method:'PUT'}); } catch(e) {}
         }
-
+        async function retryTask(taskId) {
+            try { await fetch(`/api/tasks/${taskId}/retry`, {method:'PUT'}); } catch(e) {}
+        }
         async function deleteTask(taskId) {
             if (!confirm('确定删除此任务？')) return;
+            try { await fetch(`/api/tasks/${taskId}`, {method:'DELETE'}); } catch(e) {}
+        }
+
+        // ════════════════════════════════════
+        // Workflows 面板
+        // ════════════════════════════════════
+        async function loadTemplates() {
             try {
-                await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                const res = await fetch('/api/workflows/templates');
+                const data = await res.json();
+                const sel = document.getElementById('wf-template');
+                const desc = document.getElementById('wf-template-desc');
+                sel.innerHTML = (data.templates || []).map(t =>
+                    `<option value="${esc(t.name)}">${esc(t.name)} — ${esc(t.description || '')}</option>`
+                ).join('') || '<option value="">无可用模板</option>';
+                if (data.templates && data.templates.length > 0) {
+                    const t = data.templates[0];
+                    desc.textContent = `📄 ${t.name}: ${t.stages ? t.stages.length + ' 个阶段: ' + t.stages.map(s => s.label).join(' → ') : ''}`;
+                }
+                sel.onchange = () => {
+                    const t = (data.templates || []).find(x => x.name === sel.value);
+                    if (t) desc.textContent = `📄 ${t.name}: ${t.stages ? t.stages.length + ' 个阶段: ' + t.stages.map(s => s.label).join(' → ') : ''}`;
+                };
             } catch(e) {}
         }
 
-        // ────────────────────────────────
-        // 工具函数
-        // ────────────────────────────────
-        function esc(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        async function loadWorkflows(silent) {
+            try {
+                const res = await fetch('/api/workflows');
+                const data = await res.json();
+                workflows = data.workflows || [];
+                if (currentWfFilter) {
+                    workflows = workflows.filter(w => w.status === currentWfFilter);
+                }
+                renderWorkflows();
+                // 刷新展开项的 stages
+                expandedWfs.forEach(runId => loadWfStages(runId, true));
+            } catch(e) { if (!silent) console.log(e); }
         }
 
-        function timeAgo(dateStr) {
-            if (!dateStr) return '';
-            // SQLite stores local time 'YYYY-MM-DD HH:MM:SS'
-            const d = new Date(dateStr.replace(' ', 'T'));
-            const now = new Date();
-            const diff = Math.floor((now - d) / 1000);
-            if (diff < 0) return '刚刚';
-            if (diff < 60) return `${diff}秒前`;
-            if (diff < 3600) return `${Math.floor(diff/60)}分钟前`;
-            if (diff < 86400) return `${Math.floor(diff/3600)}小时前`;
-            return dateStr.slice(0, 16);
+        function setWfFilter(status) {
+            currentWfFilter = status;
+            document.querySelectorAll('#panel-workflows .filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            loadWorkflows();
         }
+
+        function renderWorkflows() {
+            const container = document.getElementById('wf-list');
+            if (workflows.length === 0) {
+                container.innerHTML = '<div class="empty"><div class="icon">🔀</div>暂无工作流，先创建一个吧</div>';
+                return;
+            }
+            container.innerHTML = workflows.map(w => {
+                const expanded = expandedWfs.has(w.id);
+                return `
+                <div class="wf-card${expanded ? ' expanded' : ''}" id="wf-${w.id}" onclick="toggleWf('${w.id}')">
+                    <div class="header">
+                        <div>
+                            <div class="title">🔀 ${esc(w.title)}</div>
+                            <div class="meta">
+                                ${w.id} · ${esc(w.template_name)} · 创建于 ${timeAgo(w.created_at)}
+                                ${w.branch ? ' · ' + esc(w.branch) : ''}
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span class="badge badge-wf-${w.status} ${w.status === 'running' ? 'pulse' : ''}">${w.status}</span>
+                            ${w.current_stage ? `<span class="badge badge-queued">📍 ${esc(w.current_stage)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="wf-progress">
+                        <div class="progress-track"><div class="progress-fill" style="width:${wfProgress(w)}%"></div></div>
+                        <div class="wf-stages-label" id="wf-stages-label-${w.id}">加载阶段... (点击展开)</div>
+                    </div>
+                    <div class="wf-detail" id="wf-detail-${w.id}">
+                        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;" id="wf-stages-${w.id}">
+                            <div class="loading" style="padding:10px;">⏳ 加载阶段...</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            // 为展开项加载阶段
+            expandedWfs.forEach(runId => loadWfStages(runId, true));
+        }
+
+        function wfProgress(w) {
+            const stages = wfStagesCache[w.id];
+            if (!stages || stages.length === 0) return w.status === 'completed' ? 100 : 5;
+            const done = stages.filter(s => s.status === 'completed').length;
+            return Math.round(done / stages.length * 100);
+        }
+
+        function toggleWf(runId) {
+            const card = document.getElementById('wf-' + runId);
+            if (!card) return;
+            card.classList.toggle('expanded');
+            if (card.classList.contains('expanded')) {
+                expandedWfs.add(runId);
+                loadWfStages(runId);
+            } else {
+                expandedWfs.delete(runId);
+            }
+        }
+
+        async function loadWfStages(runId, silent) {
+            try {
+                const res = await fetch(`/api/workflows/${runId}/stages`);
+                const data = await res.json();
+                wfStagesCache[runId] = data.stages || [];
+                renderWfStages(runId);
+            } catch(e) { if (!silent) console.log(e); }
+        }
+
+        function renderWfStages(runId) {
+            const el = document.getElementById('wf-stages-' + runId);
+            const label = document.getElementById('wf-stages-label-' + runId);
+            if (!el) return;
+            const stages = wfStagesCache[runId] || [];
+            if (label) {
+                const done = stages.filter(s => s.status === 'completed').length;
+                label.textContent = `${done}/${stages.length} 阶段完成` + (stages.length ? ` · ${stages.map(s => s.stage_key).join(' → ')}` : '');
+            }
+            if (stages.length === 0) {
+                el.innerHTML = '<div class="empty" style="padding:15px;">暂无阶段任务</div>';
+                return;
+            }
+            const workflow = workflows.find(w => w.id === runId);
+            const currentIdx = workflow ? workflow.current_stage_index : -1;
+
+            el.innerHTML = stages.map((s, i) => {
+                const cls = i < (workflow && workflow.current_stage_index !== null ? workflow.current_stage_index : 0) ? 'done'
+                    : (s.status === 'running' ? 'current' : '');
+                const resultPreview = s.result ? `<div class="stage-result">${esc(s.result).substring(0, 500)}</div>` : '';
+                // 审批按钮：仅当该阶段是当前阶段且 gate 已判定
+                const isCurrent = workflow && s.stage_index === workflow.current_stage_index;
+                const showActions = isCurrent && workflow.status === 'running';
+                return `
+                <div class="stage-row ${cls}">
+                    <span class="stage-name">${i+1}. ${esc(s.stage_key)}</span>
+                    <span class="badge badge-${s.status} ${s.status === 'running' ? 'pulse' : ''}">${s.status}</span>
+                    ${gateBadge(s.gate_status)}
+                    <span class="stage-meta">${s.id ? s.id.substring(0,8) : ''}${s.session_id ? ' · session ✓' : ''}</span>
+                    ${showActions ? `
+                    <div class="stage-actions" onclick="event.stopPropagation()">
+                        <input type="text" id="reason-${s.id}" placeholder="理由 (reject/force/waive 必填)" />
+                        <button class="small" onclick="wfAction('${runId}', 'approve', '${s.id}')">✅ 批准</button>
+                        <button class="small warn" onclick="wfAction('${runId}', 'reject', '${s.id}')">⛔ 驳回</button>
+                        <button class="small" onclick="wfAction('${runId}', 'force', '${s.id}')">⚡ 强制</button>
+                        <button class="small ghost" onclick="wfAction('${runId}', 'waive', '${s.id}')">⏭️ 豁免</button>
+                    </div>` : ''}
+                    ${resultPreview}
+                </div>`;
+            }).join('');
+        }
+
+        async function wfAction(runId, action, taskId) {
+            const reasonInput = document.getElementById('reason-' + taskId);
+            const reason = reasonInput ? reasonInput.value.trim() : '';
+            if ((action === 'reject' || action === 'force' || action === 'waive') && !reason) {
+                alert(action + ' 操作需要填写理由');
+                return;
+            }
+            let url = `/api/workflows/${runId}/${action}`;
+            if (reason) url += `?reason=${encodeURIComponent(reason)}`;
+            try {
+                const res = await fetch(url, {method: 'POST'});
+                if (res.ok) {
+                    loadWorkflows(true);
+                    loadWfStages(runId);
+                } else {
+                    const err = await res.json();
+                    alert('操作失败: ' + (err.detail || res.status));
+                }
+            } catch(e) { alert('请求失败: ' + e.message); }
+        }
+
+        async function createWorkflow() {
+            const template = document.getElementById('wf-template').value;
+            const title = document.getElementById('wf-title').value.trim();
+            const repo = document.getElementById('wf-repo').value.trim();
+            if (!template) { alert('请选择模板'); return; }
+            if (!title) { alert('请输入工作流标题'); return; }
+            const body = { template_name: template, title };
+            if (repo) body.repo_path = repo;
+            try {
+                const res = await fetch('/api/workflows', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    document.getElementById('wf-title').value = '';
+                    const data = await res.json();
+                    switchTab('workflows');
+                    loadWorkflows();
+                    // 自动展开新建的 workflow
+                    if (data.run && data.run.id) {
+                        expandedWfs.add(data.run.id);
+                        setTimeout(() => { toggleWf(data.run.id); }, 300);
+                    }
+                } else {
+                    const err = await res.json();
+                    alert('创建失败: ' + (err.detail || res.status));
+                }
+            } catch(e) { alert('请求失败: ' + e.message); }
+        }
+
+        // ════════════════════════════════════
+        // 初始化
+        // ════════════════════════════════════
+        loadAgents();
     </script>
 </body>
 </html>
