@@ -13,8 +13,10 @@
             --text: #c9d1d9;
             --text-dim: #8b949e;
             --accent: #58a6ff;
+            --accent-btn: #1f6feb;
             --green: #3fb950;
             --red: #f85149;
+            --red-btn: #da3633;
             --yellow: #d2991d;
             --purple: #a371f7;
             --orange: #db6d28;
@@ -24,13 +26,14 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg);
             color: var(--text);
-            line-height: 1.6;
+            font-size: 14px;
+            line-height: 1.5;
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
         h1 { font-size: 1.5rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        h1 span { font-size: 0.85rem; color: var(--text-dim); font-weight: normal; }
+        h1 span { font-size: 0.875rem; color: var(--text-dim); font-weight: normal; }
 
         /* ── Tabs ── */
         .tabs {
@@ -58,7 +61,7 @@
             text-align: center;
         }
         .stat .num { font-size: 1.6rem; font-weight: 700; }
-        .stat .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat .label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; }
         .stat.queued .num { color: var(--yellow); }
         .stat.running .num { color: var(--accent); }
         .stat.completed .num { color: var(--green); }
@@ -90,7 +93,7 @@
         }
         .form-row textarea { resize: vertical; min-height: 60px; }
         button {
-            background: var(--accent);
+            background: var(--accent-btn);
             color: #fff;
             border: none;
             border-radius: 6px;
@@ -99,11 +102,11 @@
             cursor: pointer;
             font-weight: 600;
         }
-        button:hover { opacity: 0.9; }
-        button.danger { background: var(--red); }
+        button:hover { filter: brightness(1.15); }
+        button.danger { background: var(--red-btn); }
         button.warn { background: var(--orange); }
         button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-        button.small { padding: 4px 10px; font-size: 0.8rem; }
+        button.small { padding: 4px 10px; font-size: 0.85rem; }
 
         /* Task list */
         .task-list-header {
@@ -117,7 +120,7 @@
             border-radius: 6px;
             padding: 4px 12px;
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             color: var(--text-dim);
         }
         .filter-btn.active { border-color: var(--accent); color: var(--accent); }
@@ -137,7 +140,7 @@
             gap: 12px;
         }
         .task-card .title, .wf-card .title { font-weight: 600; font-size: 0.95rem; }
-        .task-card .meta, .wf-card .meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
+        .task-card .meta, .wf-card .meta { font-size: 0.8125rem; color: var(--text-dim); margin-top: 4px; }
         .task-card .log-preview {
             margin-top: 10px;
             background: var(--bg);
@@ -159,23 +162,23 @@
         .wf-card.expanded .wf-detail { display: block; }
         .stage-row {
             display: flex; align-items: center; gap: 10px;
-            padding: 8px 12px; border-left: 3px solid var(--border);
+            padding: 8px 12px; border-left: 1px solid var(--border);
             margin: 6px 0; background: var(--bg); border-radius: 0 6px 6px 0;
             flex-wrap: wrap;
         }
         .stage-row.current { border-left-color: var(--accent); }
         .stage-row.done { border-left-color: var(--green); }
-        .stage-row .stage-name { font-weight: 600; min-width: 90px; font-size: 0.85rem; }
-        .stage-row .stage-meta { font-size: 0.75rem; color: var(--text-dim); flex: 1; }
+        .stage-row .stage-name { font-weight: 600; min-width: 90px; font-size: 0.875rem; }
+        .stage-row .stage-meta { font-size: 0.78rem; color: var(--text-dim); flex: 1; }
         .stage-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .stage-actions input[type=text] {
             background: var(--bg-input); border: 1px solid var(--border);
             border-radius: 4px; padding: 4px 8px; color: var(--text);
-            font-size: 0.78rem; width: 200px; outline: none;
+            font-size: 0.8125rem; width: 200px; outline: none;
         }
         .stage-result {
             width: 100%; margin-top: 6px; background: var(--bg-card);
-            border-radius: 4px; padding: 8px; font-size: 0.75rem;
+            border-radius: 4px; padding: 8px; font-size: 0.78rem;
             color: var(--text-dim); white-space: pre-wrap; word-break: break-all;
             max-height: 150px; overflow-y: auto; font-family: monospace;
         }
@@ -212,7 +215,7 @@
         /* Agent bar */
         .agent-bar {
             display: flex; gap: 8px; align-items: center;
-            margin-bottom: 20px; font-size: 0.82rem; color: var(--text-dim);
+            margin-bottom: 20px; font-size: 0.85rem; color: var(--text-dim);
             flex-wrap: wrap;
         }
         .agent-dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -234,9 +237,12 @@
         }
         .progress-fill {
             background: linear-gradient(90deg, var(--accent), var(--green));
-            height: 100%; border-radius: 4px; transition: width 0.5s;
+            height: 100%; border-radius: 4px;
+            transform-origin: left center;
+            transition: transform 0.5s ease-out;
+            width: 100%;
         }
-        .wf-stages-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+        .wf-stages-label { font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
 
         /* ── Designer (canvas) ── */
         .designer-layout {
@@ -253,7 +259,7 @@
             overflow: hidden;
         }
         .node-palette h3, .node-config h3 {
-            font-size: 0.85rem; margin-bottom: 10px; color: var(--text-dim);
+            font-size: 0.875rem; margin-bottom: 10px; color: var(--text-dim);
         }
         .palette-item {
             background: var(--bg-input);
@@ -262,7 +268,7 @@
             padding: 10px 12px;
             margin-bottom: 8px;
             cursor: grab;
-            font-size: 0.82rem;
+            font-size: 0.85rem;
             text-align: center;
             user-select: none;
         }
@@ -272,15 +278,13 @@
         .canvas-wrap { display: flex; flex-direction: column; }
         .canvas-toolbar {
             display: flex; align-items: center;
-            font-size: 0.75rem; color: var(--text-dim);
+            font-size: 0.78rem; color: var(--text-dim);
             padding-bottom: 8px; border-bottom: 1px solid var(--border);
             margin-bottom: 8px;
         }
         .canvas-scroll {
             flex: 1; overflow: auto; position: relative;
-            background:
-                radial-gradient(circle, var(--border) 1px, transparent 1px);
-            background-size: 24px 24px;
+            background: var(--bg);
         }
         .canvas {
             position: relative;
@@ -316,8 +320,8 @@
         }
         .flow-node:hover { border-color: var(--accent); }
         .flow-node.selected { border-color: var(--green); box-shadow: 0 0 0 2px rgba(63,185,80,0.2); }
-        .flow-node .node-title { font-size: 0.8rem; font-weight: 600; }
-        .flow-node .node-sub { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+        .flow-node .node-title { font-size: 0.85rem; font-weight: 600; }
+        .flow-node .node-sub { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
         .flow-node.start-node { border-color: var(--green); }
         .flow-node.end-node { border-color: var(--purple); }
         .node-port {
@@ -337,7 +341,7 @@
         .node-config { overflow-y: auto; }
         .config-field { margin-bottom: 10px; }
         .config-field label {
-            display: block; font-size: 0.72rem; color: var(--text-dim);
+            display: block; font-size: 0.75rem; color: var(--text-dim);
             margin-bottom: 4px;
         }
         .config-field input, .config-field textarea, .config-field select {
@@ -347,15 +351,15 @@
             border-radius: 4px;
             padding: 6px 8px;
             color: var(--text);
-            font-size: 0.78rem;
+            font-size: 0.8125rem;
             outline: none;
         }
         .config-field textarea { resize: vertical; min-height: 70px; font-family: monospace; }
         .delete-node-btn {
             width: 100%; margin-top: 6px;
-            background: var(--red); color: #fff;
+            background: var(--red-btn); color: #fff;
             border: none; border-radius: 4px;
-            padding: 6px; font-size: 0.78rem; cursor: pointer;
+            padding: 6px; font-size: 0.8125rem; cursor: pointer;
         }
 
         /* ── Agent 卡片 ── */
@@ -374,10 +378,10 @@
         }
         .agent-card-header b { font-size: 0.95rem; }
         .agent-model {
-            font-size: 0.78rem; color: var(--accent); margin-bottom: 4px;
+            font-size: 0.8125rem; color: var(--accent); margin-bottom: 4px;
         }
         .agent-prompt {
-            font-size: 0.8rem; color: var(--text-dim);
+            font-size: 0.85rem; color: var(--text-dim);
             background: var(--bg); border-radius: 4px;
             padding: 8px 10px; margin: 6px 0;
             max-height: 80px; overflow-y: auto;
@@ -387,7 +391,7 @@
         .agent-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
         .agent-field { margin-bottom: 8px; }
         .agent-field label {
-            display: block; font-size: 0.72rem; color: var(--text-dim); margin-bottom: 3px;
+            display: block; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 3px;
         }
         .agent-field input, .agent-field select, .agent-field textarea {
             width: 100%;
@@ -396,14 +400,14 @@
             border-radius: 4px;
             padding: 6px 8px;
             color: var(--text);
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             outline: none;
         }
         .agent-field textarea { resize: vertical; font-family: monospace; }
         .agent-ref-warn {
             margin-top: 8px; padding: 6px 10px;
             background: rgba(210,153,29,0.1); border: 1px solid rgba(210,153,29,0.3);
-            border-radius: 4px; font-size: 0.75rem; color: var(--yellow);
+            border-radius: 4px; font-size: 0.78rem; color: var(--yellow);
         }
     </style>
 </head>
@@ -481,7 +485,7 @@
                 <input type="text" id="wf-repo" placeholder="代码仓库路径（留空 = 当前目录）" style="flex:2" />
                 <button onclick="createWorkflow()">创建工作流</button>
             </div>
-            <div class="form-row" id="wf-template-desc" style="font-size:0.8rem;color:var(--text-dim);margin:0;"></div>
+            <div class="form-row" id="wf-template-desc" style="font-size:0.85rem;color:var(--text-dim);margin:0;"></div>
         </div>
 
         <!-- workflow 列表 -->
@@ -553,7 +557,7 @@
                 <div class="palette-item" draggable="true" data-type="end" ondragstart="paletteDrag(event)">
                     🏁 结束
                 </div>
-                <div style="margin-top:16px;font-size:0.72rem;color:var(--text-dim);line-height:1.8;">
+                <div style="margin-top:16px;font-size:0.75rem;color:var(--text-dim);line-height:1.8;">
                     操作提示:<br/>
                     🖱 拖拽节点到画布<br/>
                     🔗 从节点右侧圆点拖出连线<br/>
@@ -583,7 +587,7 @@
             <!-- 配置面板 -->
             <div class="node-config" id="node-config">
                 <h3 id="config-title">节点配置</h3>
-                <div id="config-body" style="font-size:0.8rem;color:var(--text-dim);">
+                <div id="config-body" style="font-size:0.85rem;color:var(--text-dim);">
                     点击画布中的节点进行配置
                 </div>
             </div>
@@ -913,13 +917,13 @@
                 const res = await fetch(`/api/tasks/${taskId}/comments`);
                 const comments = await res.json();
                 el.innerHTML = (comments || []).map(c =>
-                    `<div style="font-size:0.8rem;padding:4px 0;border-bottom:1px solid var(--border);">
+                    `<div style="font-size:0.85rem;padding:4px 0;border-bottom:1px solid var(--border);">
                         <b>${esc(c.author)}</b> <span style="color:var(--text-dim)">${timeAgo(c.created_at)}</span>
                         <div>${esc(c.content)}</div>
                     </div>`
                 ).join('') + `
                     <div style="display:flex;gap:6px;margin-top:8px;">
-                        <input id="comment-input-${taskId}" placeholder="添加评论..." style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:0.8rem;" />
+                        <input id="comment-input-${taskId}" placeholder="添加评论..." style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:0.85rem;" />
                         <button class="small" onclick="addComment('${taskId}')">发送</button>
                     </div>`;
             } catch(e) {}
@@ -1037,7 +1041,7 @@
                         </div>
                     </div>
                     <div class="wf-progress">
-                        <div class="progress-track"><div class="progress-fill" style="width:${wfProgress(w)}%"></div></div>
+                        <div class="progress-track"><div class="progress-fill" style="transform:scaleX(${wfProgress(w)/100})"></div></div>
                         <div class="wf-stages-label" id="wf-stages-label-${w.id}">加载阶段... (点击展开)</div>
                     </div>
                     <div class="wf-detail" id="wf-detail-${w.id}">
@@ -1408,7 +1412,7 @@
                         <option value="">— 不使用 Agent（用下方自定义 Prompt）—</option>
                         ${window.allAgents.map(a => `<option value="${esc(a.name)}" ${node.agent_ref === a.name ? 'selected' : ''}>🤖 ${esc(a.name)}${a.model ? ' · ' + esc(a.model) : ''}</option>`).join('')}
                     </select>
-                    ${node.agent_ref ? `<div style="font-size:0.7rem;color:var(--green);margin-top:3px;">✅ 绑定 ${esc(node.agent_ref)}，执行时自动注入其人格/模型（Agent 修改后此处自动生效）</div>` : ''}
+                    ${node.agent_ref ? `<div style="font-size:0.75rem;color:var(--green);margin-top:3px;">✅ 绑定 ${esc(node.agent_ref)}，执行时自动注入其人格/模型（Agent 修改后此处自动生效）</div>` : ''}
                 </div>
                 <div class="config-field" ${node.agent_ref ? 'style="opacity:0.4;pointer-events:none;"' : ''}>
                     <label>System Prompt（未绑定时使用）</label>
@@ -1424,7 +1428,7 @@
                         <option value="">— 默认（Agent 或 pi 默认）—</option>
                         ${window.allModels.map(m => `<option value="${esc(m)}" ${node.model === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
                     </select>
-                    ${window.allModels.length === 0 ? '<div style="font-size:0.7rem;color:var(--yellow);margin-top:3px;">⚠️ 未读取到 pi models.json（~/.pi/agent/models.json）</div>' : ''}
+                    ${window.allModels.length === 0 ? '<div style="font-size:0.75rem;color:var(--yellow);margin-top:3px;">⚠️ 未读取到 pi models.json（~/.pi/agent/models.json）</div>' : ''}
                 </div>` : ''}
                 <div class="config-field" style="margin-top:14px;">
                     <label>依赖（来自其他节点）</label>
@@ -1526,7 +1530,7 @@
                 }
                 existing.innerHTML = '<h3 style="font-size:0.78rem;color:var(--text-dim);margin-bottom:6px;">已保存模板</h3>' +
                     names.map(n => `<div style="font-size:0.75rem;padding:4px 6px;cursor:pointer;border-radius:4px;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='transparent'" onclick="loadDesignerTemplate('${esc(n)}')">📄 ${esc(n)}</div>`).join('') ||
-                    '<div style="font-size:0.72rem;color:var(--text-dim);">暂无</div>';
+                    '<div style="font-size:0.75rem;color:var(--text-dim);">暂无</div>';
             } catch(e) {}
         }
 
