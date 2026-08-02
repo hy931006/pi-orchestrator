@@ -393,6 +393,20 @@ def get_agent(agent_id: str) -> Optional[dict]:
     return d
 
 
+def get_agent_by_name(name: str) -> Optional[dict]:
+    """按名称获取 Agent（workflow 阶段 agent_ref 绑定用）"""
+    import json as _json
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM agents WHERE name = ? AND is_active = 1",
+                           (name,)).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["skills"] = _json.loads(d.get("skills", "[]"))
+    d["tools"] = _json.loads(d.get("tools", "[]"))
+    return d
+
+
 def list_agents(active_only: bool = False) -> list[dict]:
     """列出所有 Agent"""
     import json as _json

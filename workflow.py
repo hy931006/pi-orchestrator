@@ -64,8 +64,15 @@ def validate_template(template: dict) -> None:
     for s in stages:
         if not s.get("required_artifacts"):
             raise WorkflowError(f"阶段 {s.get('key')} 缺少 required_artifacts")
-        if not s.get("agent", {}).get("system_prompt"):
-            raise WorkflowError(f"阶段 {s.get('key')} 缺少 agent.system_prompt")
+        # agent 绑定：agent_ref 引用 agents 表（持久实体），或内嵌 system_prompt
+        agent_ref = s.get("agent_ref")
+        if agent_ref:
+            if not db.get_agent_by_name(agent_ref):
+                raise WorkflowError(
+                    f"阶段 {s.get('key')} 引用的 agent '{agent_ref}' 不存在（先在 Agent 管理中创建）")
+        else:
+            if not s.get("agent", {}).get("system_prompt"):
+                raise WorkflowError(f"阶段 {s.get('key')} 缺少 agent.system_prompt 或 agent_ref")
         # DAG 依赖校验：depends_on 必须指向已定义阶段，且不能自依赖
         deps = s.get("depends_on") or []
         for d in deps:
@@ -135,7 +142,12 @@ def inject_context(stage: dict, artifact_dir: str) -> str:
             lines.append("  请读取该目录下的报告文件，理解其结论和约束")
         lines.append("")
     lines.append("## 本阶段任务")
-    lines.append(stage["agent"].get("system_prompt", ""))
+    agent_ref = stage.get("agent_ref")
+    if agent_ref:
+        # agent 是持久实体：daemon 从 agents 表加载 system_prompt + model
+        lines.append(f"（本阶段绑定自定义 Agent: {agent_ref}，由 daemon 注入其人格与模型）")
+    else:
+        lines.append(stage["agent"].get("system_prompt", ""))
     return "\n".join(lines)
 
 
@@ -174,11 +186,23 @@ def create_workflow(template_name: str, title: str, repo_path: str = None) -> di
 
 
 def _create_stage_task(run: dict, stage: dict) -> dict:
-    """为单个阶段创建 task 并绑定 workflow 字段"""
+    """为单个阶段创建 task 并绑定 workflow 字段
+
+    agent 绑定策略（agent 是持久实体，不内嵌 prompt）:
+      - stage.agent_ref = agents 表 name → task.agent_type = agent id
+        （daemon 执行时从 agents 表加载 system_prompt + model）
+      - stage.agent.system_prompt 内嵌 → 不设 agent_type（用内嵌 prompt）
+    """
+    agent_ref = stage.get("agent_ref")
+    agent_type = "auto"
+    if agent_ref:
+        agent = db.get_agent_by_name(agent_ref)
+        if agent:
+            agent_type = agent["id"]
     task = db.create_task(
         title=f"[{run['id']}] {stage.get('label', stage['key'])}",
         description=inject_context(stage, run["artifact_dir"]),
-        agent_type="auto",
+        agent_type=agent_type,
         repo_path=run["repo_path"],
     )
     with db.get_db() as conn:

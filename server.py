@@ -266,17 +266,22 @@ def _template_to_stages(name: str, nodes: list, edges: list) -> list:
         nid = n.get("key") or n.get("id")
         if not nid:
             raise HTTPException(status_code=400, detail="节点缺少 key")
-        stages.append({
+        stage = {
             "key": str(nid),
             "label": n.get("label") or str(nid),
             "index": nodes.index(n),
             "depends_on": [],
             "agent": {"model": n.get("model", ""),
-                      "system_prompt": n.get("system_prompt", "执行该阶段任务并产出成果。")},
+                      "system_prompt": n.get("system_prompt", "")},
             "required_artifacts": n.get("required_artifacts") or ["*.md"],
             "context_inject": {"prior_stages": []},
-            "canvas": {"x": n.get("x", 0), "y": n.get("y", 0)},
-        })
+            "canvas": {"x": n.get("x", 0), "y": n.get("y", 0),
+                       "type": n.get("type", "agent")},
+        }
+        # agent_ref: 引用 agents 表持久实体（不内嵌 prompt）
+        if n.get("agent_ref"):
+            stage["agent_ref"] = str(n["agent_ref"])
+        stages.append(stage)
     for e in edges:
         src, dst = e.get("from"), e.get("to")
         if not src or not dst:

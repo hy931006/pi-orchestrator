@@ -708,6 +708,7 @@
             try {
                 const res = await fetch('/api/agents');
                 const agents = await res.json();
+                window.allAgents = agents.filter(a => a.is_active);  // 画布 Agent 下拉用
                 const list = document.getElementById('agent-list');
                 list.innerHTML = agents.filter(a => a.is_active).map(a =>
                     `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;min-width:180px;">
@@ -1078,6 +1079,7 @@
                 label: type === 'start' ? '开始' : type === 'end' ? '结束' : '阶段 ' + nodeIdSeq,
                 system_prompt: '你是执行该阶段的专家。完成本阶段任务并产出成果文件。',
                 required_artifacts: ['*.md'],
+                agent_ref: '',  // 引用 agents 表持久实体（可选）
             };
             designerNodes.push(node);
             renderDesigner();
@@ -1238,8 +1240,16 @@
                 </div>
                 ${node.type === 'agent' || node.type === 'start' ? `
                 <div class="config-field">
-                    <label>System Prompt（任务指令）</label>
-                    <textarea id="cfg-prompt" onchange="updateNodeConfig('system_prompt', this.value)">${esc(node.system_prompt)}</textarea>
+                    <label>绑定 Agent（可选，引用 Agent 管理中已定义的持久实体）</label>
+                    <select id="cfg-agent" onchange="updateNodeConfig('agent_ref', this.value)">
+                        <option value="">— 不使用 Agent（用下方自定义 Prompt）—</option>
+                        ${window.allAgents.map(a => `<option value="${esc(a.name)}" ${node.agent_ref === a.name ? 'selected' : ''}>🤖 ${esc(a.name)}${a.model ? ' · ' + esc(a.model) : ''}</option>`).join('')}
+                    </select>
+                    ${node.agent_ref ? `<div style="font-size:0.7rem;color:var(--green);margin-top:3px;">✅ 绑定 ${esc(node.agent_ref)}，执行时自动注入其人格/模型（Agent 修改后此处自动生效）</div>` : ''}
+                </div>
+                <div class="config-field" ${node.agent_ref ? 'style="opacity:0.4;pointer-events:none;"' : ''}>
+                    <label>System Prompt（未绑定时使用）</label>
+                    <textarea id="cfg-prompt" onchange="updateNodeConfig('system_prompt', this.value)" ${node.agent_ref ? 'disabled' : ''}>${esc(node.system_prompt)}</textarea>
                 </div>
                 <div class="config-field">
                     <label>产出文件 glob（逗号分隔）</label>
@@ -1307,6 +1317,7 @@
             const nodes = designerNodes.map(n => ({
                 key: n.id, label: n.label, type: n.type,
                 system_prompt: n.system_prompt, required_artifacts: n.required_artifacts,
+                agent_ref: n.agent_ref || '',
                 x: Math.round(n.x), y: Math.round(n.y),
             }));
             const edges = designerEdges.map(e => ({from: e.from, to: e.to}));
@@ -1361,6 +1372,7 @@
                     y: (s.canvas && s.canvas.y) || 100,
                     system_prompt: s.agent.system_prompt,
                     required_artifacts: s.required_artifacts,
+                    agent_ref: s.agent_ref || '',
                 }));
                 designerEdges = [];
                 (t.stages || []).forEach(s => {

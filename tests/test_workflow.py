@@ -161,6 +161,49 @@ def test_all():
     except wf.WorkflowError:
         check("DAG 环被拒绝", True)
 
+    # 10. agent_ref 绑定（agent 是持久实体，不内嵌 prompt）
+    my_agent = db.create_agent(name="绑定测试Agent", system_prompt="测试人格",
+                               model="test/model")
+    tpl_agent = {
+        "name": "agent-flow", "stages": [
+            {"key": "s1", "label": "S1", "index": 0, "depends_on": [],
+             "agent_ref": "绑定测试Agent", "agent": {"system_prompt": "", "model": ""},
+             "required_artifacts": ["s1.md"]},
+            {"key": "s2", "label": "S2", "index": 1, "depends_on": ["s1"],
+             "agent": {"system_prompt": "内嵌prompt", "model": ""},
+             "required_artifacts": ["s2.md"]},
+        ],
+    }
+    wf_dir2 = wf_mod.WORKFLOWS_DIR
+    agent_flow_file = wf_dir2 / "agent-flow.yaml"
+    import yaml as _y
+    agent_flow_file.write_text(_y.safe_dump(tpl_agent, allow_unicode=True, sort_keys=False),
+                               encoding="utf-8")
+    try:
+        wf_mod.validate_template(tpl_agent)
+        check("agent_ref 模板校验通过", True)
+        res = wf_mod.create_workflow("agent-flow", "agent flow", tempfile.mkdtemp())
+        s1_task = res["first_tasks"][0]
+        check("agent_ref 阶段绑定 Agent id", s1_task["agent_type"] == my_agent["id"],
+              s1_task["agent_type"])
+        with db.get_db() as conn:
+            conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (s1_task["id"],))
+        s2_task = wf_mod.advance_stage(res["run"]["id"])
+        check("内嵌 prompt 阶段 agent=auto", s2_task["agent_type"] == "auto",
+              s2_task["agent_type"])
+        # 引用了不存在的 agent → 校验失败
+        bad_agent = {"name": "bad-agent", "stages": [
+            {"key": "x", "index": 0, "depends_on": [], "agent_ref": "不存在Agent",
+             "agent": {"system_prompt": "", "model": ""}, "required_artifacts": ["x.md"]},
+        ]}
+        try:
+            wf_mod.validate_template(bad_agent)
+            check("不存在 agent_ref 被拒绝", False)
+        except wf.WorkflowError:
+            check("不存在 agent_ref 被拒绝", True)
+    finally:
+        agent_flow_file.unlink(missing_ok=True)
+
     print(f"\n{'='*50}\nWorkflow 测试: {PASS} 通过, {FAIL} 失败")
     sys.exit(1 if FAIL else 0)
 
