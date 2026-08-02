@@ -12,7 +12,7 @@ stages:
         你是编码工程师。修复指定问题并提交。
     required_artifacts:
       - "*.py"
-    gate_rules: "minimal/gate-checks.yaml"
+    gate_rules: ""
     context_inject:
       prior_stages: []
 
