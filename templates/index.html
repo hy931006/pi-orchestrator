@@ -1383,24 +1383,70 @@
                 document.getElementById('dg-name').value = t.name;
                 document.getElementById('dg-desc').value = t.description || '';
                 // 转换 stages → nodes/edges
-                designerNodes = (t.stages || []).map(s => ({
+                const stages = t.stages || [];
+                const hasCanvas = stages.some(s => s.canvas && typeof s.canvas.x === 'number');
+                // 无 canvas 坐标的模板（手写 YAML）→ 自动布局（按依赖层级横向展开）
+                const layout = hasCanvas ? null : autoLayout(stages);
+                designerNodes = stages.map((s, i) => ({
                     id: s.key, type: (s.canvas && s.canvas.type) || 'agent',
-                    label: s.label, x: (s.canvas && s.canvas.x) || 100,
-                    y: (s.canvas && s.canvas.y) || 100,
+                    label: s.label,
+                    x: layout ? layout[i].x : ((s.canvas && s.canvas.x) || 100),
+                    y: layout ? layout[i].y : ((s.canvas && s.canvas.y) || 100),
                     system_prompt: s.agent.system_prompt,
                     required_artifacts: s.required_artifacts,
                     agent_ref: s.agent_ref || '',
                     model: s.agent.model || '',
                 }));
                 designerEdges = [];
-                (t.stages || []).forEach(s => {
+                stages.forEach(s => {
                     (s.depends_on || []).forEach(d => designerEdges.push({from: d, to: s.key}));
                 });
                 nodeIdSeq = Math.max(...designerNodes.map(n => parseInt(n.id.replace(/\D/g, '')) || 0), 0) + 1;
                 selectedNodeId = null;
                 renderDesigner();
                 showNodeConfig(null);
+                if (layout) {
+                    alert(`模板 ${name} 无画布坐标，已自动布局（${stages.length} 个节点）`);
+                }
             } catch(e) { alert('加载失败: ' + e.message); }
+        }
+
+        // 自动布局：按依赖层级分列（x=层级*220+100），同层纵向展开（y=序号*90+100）
+        function autoLayout(stages) {
+            const byKey = {};
+            stages.forEach(s => byKey[s.key] = s);
+            const depth = {};
+            function calcDepth(key) {
+                if (depth[key] !== undefined) return depth[key];
+                const s = byKey[key];
+                const deps = s.depends_on || [];
+                depth[key] = deps.length === 0 ? 0 : 1 + Math.max(...deps.map(calcDepth));
+                return depth[key];
+            }
+            stages.forEach(s => calcDepth(s.key));
+            // 按 (深度, 原顺序) 分层
+            const layers = {};
+            stages.forEach(s => {
+                const d = depth[s.key];
+                (layers[d] = layers[d] || []).push(s.key);
+            });
+            // 同层内按依赖顺序排序（被依赖者在前）
+            Object.keys(layers).forEach(d => {
+                layers[d].sort((a, b) => {
+                    const aDeps = byKey[a].depends_on || [], bDeps = byKey[b].depends_on || [];
+                    if (aDeps.includes(b)) return 1;
+                    if (bDeps.includes(a)) return -1;
+                    return stages.findIndex(s => s.key === a) - stages.findIndex(s => s.key === b);
+                });
+            });
+            const positions = {};
+            Object.keys(layers).forEach(d => {
+                const layer = layers[d];
+                layer.forEach((key, i) => {
+                    positions[key] = { x: 100 + Number(d) * 220, y: 100 + i * 90 };
+                });
+            });
+            return stages.map(s => positions[s.key]);
         }
 
         // ════════════════════════════════════
