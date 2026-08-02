@@ -1,0 +1,30 @@
+# 人工审批决策记录 — wf-001 Stage 4 (implementation)
+#
+# 授权来源: 用户 2026-08-01「本次任务我不进行人工审核了。你代替我做决定」
+# 记录者: Hermes Agent (deepseek-v4-flash)
+# 授权人: Young He (用户)
+
+schema_version: 1
+
+decisions:
+  H1:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-02T09:30:00Z"
+    reason: >
+      代码实现与 02-design-report.md 一致: workflow.py/gate.py/qa.py 三模块新建，
+      database.py 纯增补迁移 (workflow_runs 表 + tasks 5 列)，server.py 新增 10 端点
+      (create/list/get/stages/approve/reject/force/waive + templates)，
+      daemon.py 模板预加载 (R9) + gate 后置 + 自动流转 (代理决策模式)。
+      minimal 模板 gate_rules 置空是测试模板的合理简化（无真实规则依赖）。
+      代理决策: 批准。
+
+  H2:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-02T09:30:00Z"
+    reason: >
+      测试覆盖: test_agent 49 + test_workflow 10 + test_gate 8 + test_qa 6 = 73 单测全绿；
+      test_workflow_e2e 8 断言 (server+daemon+mock pi 全链路: 创建→执行→gate→流转→完成
+      + 单任务共存 + daemon 无崩溃)。ruff 全清 (0 error)。E2E 真实 pi 留待 Stage 5
+      (需真实终端运行 daemon)。代理决策: 批准。

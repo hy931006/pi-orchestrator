@@ -1,0 +1,73 @@
+# 门控规则定义 — wf-001 Stage 4 (implementation)
+# 检查器: 04-gate_check.py (yaml.safe_load 真解析)
+
+schema_version: 1
+
+checks:
+  # ═══════ 代码存在性 (structure) ═══════
+  - id: I1
+    type: structure
+    severity: blocker
+    target: "*.py"
+    rule: 核心模块存在（workflow.py/gate.py/qa.py + 修改的 daemon/server/database）
+    expected_sections:
+      - "workflow.py"
+      - "gate.py"
+      - "qa.py"
+
+  - id: I2
+    type: structure
+    severity: blocker
+    target: "workflows/*.yaml"
+    rule: 模板文件存在（default + minimal）
+    expected_sections:
+      - "default"
+      - "minimal"
+
+  # ═══════ 测试验证 (content) ═══════
+  - id: I3
+    type: content
+    severity: blocker
+    target: "tests/*.py"
+    rule: 新增测试文件存在（test_workflow/test_gate/test_qa/test_workflow_e2e）
+    expected_sections:
+      - "test_workflow"
+      - "test_gate"
+      - "test_qa"
+      - "test_workflow_e2e"
+
+  - id: I4
+    type: content
+    severity: blocker
+    target: "tests/*.py"
+    rule: 测试数达标（workflow≥10, gate≥8, qa≥6, e2e≥8 断言）
+
+  # ═══════ 交叉引用 (cross_ref) ═══════
+  - id: I5
+    type: cross_ref
+    severity: blocker
+    target: "*.py"
+    rule: 核心模块互相引用完整（daemon 引用 workflow+gate）
+    expected_tokens:
+      - "import gate"
+      - "import workflow as wf"
+
+  # ═══════ 人工审批 (human) ═══════
+  - id: H1
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "代理决策: 代码实现符合 02-design-report.md（3 模块 + 1 表 + 5 列 + 10 端点 + 自动流转）"
+    machine_checks:
+      - "workflow_runs"
+      - "advance_stage"
+      - "_after_stage"
+
+  - id: H2
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "代理决策: 测试覆盖达标（73 单测 + 8 E2E 全绿），lint 全清，可进入 Stage 5 QA"
+    machine_checks:
+      - "73"
+      - "8"
