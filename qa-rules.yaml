@@ -1,0 +1,15 @@
+# qa-rules.yaml — 自定义 QA 规则（设计 §7.3）
+rules:
+  - id: QA001
+    pattern: 'print\(.*\)'
+    file_glob: "*.py"
+    severity: warning
+    blocking: false
+    description: 禁止遗留调试 print() 语句
+
+  - id: QA002
+    pattern: '@pytest\.mark\.skip'
+    file_glob: "test_*.py"
+    severity: blocker
+    blocking: true
+    description: 禁止提交跳过的测试
