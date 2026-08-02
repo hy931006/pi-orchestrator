@@ -14,6 +14,7 @@ import socket
 import time
 import sys
 import signal
+import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import database as db
 from agent import PiAgent, detect_pi
+import gate
+import workflow as wf
 
 logging.basicConfig(
     level=logging.INFO,
@@ -257,6 +260,80 @@ class TaskExecutor:
         logger.info(f"{'✅' if status == 'completed' else '❌'} [{task_id}] {status}: "
                     f"{(result.text or result.error)[:80]}")
 
+        # ── workflow 阶段完成后的门控 + 流转 ──
+        if status == "completed":
+            self._after_stage(task, result)
+
+    def _after_stage(self, task: dict, result):
+        """workflow 阶段任务完成后的门控 + 流转（设计 §5.1/§6）"""
+        run_id = task.get("workflow_run_id")
+        if not run_id:
+            return
+        run = db.get_workflow_run(run_id)
+        if not run:
+            logger.error(f"workflow {run_id}: 实例不存在")
+            return
+        try:
+            templates = wf.load_templates()
+        except wf.WorkflowError as e:
+            logger.error(f"workflow {run_id}: 模板加载失败: {e}")
+            return
+        template = templates.get(run["template_name"])
+        if not template:
+            logger.error(f"workflow {run_id}: 模板 {run['template_name']} 丢失")
+            return
+        stages = template["stages"]
+        stage = stages[task.get("stage_index") or 0]
+        stage_key = task.get("stage_key") or stage["key"]
+
+        # ── gate 自动检查 ──
+        gate_status = "auto_passed"
+        rules_rel = stage.get("gate_rules", "")
+        if rules_rel:
+            artifact_dir = Path(run["artifact_dir"]) / stage_key
+            rules_path = Path(run["artifact_dir"]) / rules_rel
+            try:
+                passed, md = gate.run_gate(rules_path, artifact_dir)
+                gate_status = "auto_passed" if passed else "auto_failed"
+                logger.info(f"🔒 [{task['id']}] gate={gate_status} ({'✅' if passed else '❌'})")
+            except gate.GateError as e:
+                gate_status = "auto_failed"
+                logger.error(f"🔒 [{task['id']}] gate 异常 → auto_failed: {e}")
+        else:
+            logger.info(f"🔒 [{task['id']}] 无 gate_rules，直接 auto_passed")
+
+        db.update_task_status(task["id"], "completed",
+                              gate_status=gate_status,
+                              gate_result_json=json.dumps(
+                                  {"passed": gate_status == "auto_passed",
+                                   "stage": stage_key}, ensure_ascii=False))
+
+        # ── 阶段产物 git commit（设计 §5.3）──
+        self._commit_stage_artifacts(run, stage_key)
+
+        # ── 自动流转到下一阶段（代理决策模式）──
+        try:
+            wf.advance_stage(run_id)
+        except wf.WorkflowError as e:
+            logger.error(f"workflow {run_id}: 流转失败: {e}")
+
+    def _commit_stage_artifacts(self, run: dict, stage_key: str):
+        """阶段产物 commit（每个阶段一个独立 commit，Q6 追溯）"""
+        repo = run.get("repo_path")
+        if not repo:
+            return
+        try:
+            subprocess.run(["git", "-C", repo, "add", run["artifact_dir"]],
+                           capture_output=True, timeout=30)
+            r = subprocess.run(
+                ["git", "-C", repo, "commit", "-m",
+                 f"docs({run['id']}/{stage_key}): stage artifacts"],
+                capture_output=True, timeout=30)
+            if r.returncode != 0 and b"nothing to commit" not in r.stderr:
+                logger.warning(f"stage commit 失败: {r.stderr.decode(errors='replace')[:200]}")
+        except Exception as e:
+            logger.warning(f"stage commit 异常: {e}")
+
 
 # ═══════════════════════════════════════════
 # Main
@@ -265,6 +342,14 @@ class TaskExecutor:
 def main():
     logger.info("🔄 Pi Orchestrator Daemon starting...")
     db.init_db()
+
+    # ── workflow 模板预加载（R9: 语法错误 → 拒绝启动）──
+    try:
+        templates = wf.load_templates()
+        logger.info(f"📂 加载 workflow 模板: {sorted(templates)}")
+    except wf.WorkflowError as e:
+        logger.error(f"❌ workflow 模板加载失败，拒绝启动: {e}")
+        return
 
     pi_path = detect_pi()
     if not pi_path:
