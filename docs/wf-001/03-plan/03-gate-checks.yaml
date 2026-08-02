@@ -1,0 +1,98 @@
+# 门控规则定义 — wf-001 Stage 3 (plan)
+# 检查器: 03-gate_check.py (yaml.safe_load 真解析)
+
+schema_version: 1
+
+checks:
+  # ═══════ 结构完整性 (structure) ═══════
+  - id: P1
+    type: structure
+    severity: blocker
+    target: 03-plan.md
+    rule: 文件存在且非空
+
+  - id: P2
+    type: structure
+    severity: blocker
+    target: 03-plan.md
+    rule: 任务总览章节存在（含 T1-T9 任务表）
+    expected_sections:
+      - "任务总览"
+      - "T1: DB 迁移"
+      - "T2: workflow.py"
+      - "T3: gate.py"
+      - "T4: qa.py"
+      - "T5: daemon.py"
+      - "T6: server.py"
+      - "T7: 模板文件"
+      - "T8: 单元测试"
+      - "T9: 全量回归"
+
+  - id: P3
+    type: structure
+    severity: blocker
+    target: 03-plan.md
+    rule: 风险与偏差声明章节存在
+    expected_sections:
+      - "风险与偏差声明"
+
+  # ═══════ 交叉引用 (cross_ref) ═══════
+  - id: P4
+    type: cross_ref
+    severity: blocker
+    target: 03-plan.md
+    rule: 引用上游 Stage 2 闭合 commit 7509cc6
+    expected_tokens:
+      - "7509cc6"
+
+  - id: P5
+    type: cross_ref
+    severity: blocker
+    target: 03-plan.md
+    rule: 每个 T 任务有验收标准
+    expected_tokens:
+      - "验收"
+
+  # ═══════ 内容质量 (content) ═══════
+  - id: P6
+    type: content
+    severity: warning
+    target: 03-plan.md
+    rule: 无 TODO/TBD/FIXME/待定 占位符
+
+  - id: P7
+    type: content
+    severity: warning
+    target: 03-plan.md
+    rule: 实施计划足够详尽（≥3000 中文字符 或 ≥8 个代码块——计划以代码为主，二者满足其一即可）
+    min_chars: 3000
+    min_code_blocks: 8
+
+  # ═══════ YAML 可解析性 (yaml_parse) ═══════
+  - id: P8
+    type: yaml_parse
+    severity: blocker
+    target: 03-plan.md
+    rule: §8 T7 minimal.yaml 模板代码块可被 yaml.safe_load 解析
+    yaml_block_index: 0
+
+  # ═══════ 人工审批 (human) ═══════
+  - id: H1
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "代理决策: 计划任务拆分合理（T1-T9 串行，每任务有文件路径+验收命令）"
+    machine_checks:
+      - "T1"
+      - "T9"
+      - "验收"
+
+  - id: H2
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "代理决策: T9 将 E2E 全链路验证推迟到 Stage 5，且 ruff/mypy 在实施阶段安装"
+    machine_checks:
+      - "Stage 5"
+      - "ruff"
+      - "mypy"

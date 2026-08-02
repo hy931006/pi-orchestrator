@@ -1,0 +1,27 @@
+# 人工审批决策记录 — wf-001 Stage 3 (plan)
+#
+# 授权来源: 用户 2026-08-01「本次任务我不进行人工审核了。你代替我做决定」
+# 记录者: Hermes Agent (deepseek-v4-flash)
+# 授权人: Young He (用户)
+
+schema_version: 1
+
+decisions:
+  H1:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-02T00:30:00Z"
+    reason: >
+      任务拆分合理: T1-T9 严格串行，每任务含精确文件路径、完整代码、
+      验收命令（设计 §2 任务总览表）。覆盖 Stage 2 设计的全部模块
+      (workflow.py/gate.py/qa.py/daemon 接入/server 端点/模板/测试)。
+      代理决策: 批准。
+
+  H2:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-02T00:30:00Z"
+    reason: >
+      E2E 全链路验证推迟到 Stage 5 是合理决策（E2E 需 daemon+pi 真实终端，
+      在实施完成前无法运行）。ruff/mypy 在 Stage 4 实施时安装并用于 T9 回归。
+      代理决策: 批准。
