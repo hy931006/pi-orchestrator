@@ -311,9 +311,9 @@ class TaskExecutor:
         # ── 阶段产物 git commit（设计 §5.3）──
         self._commit_stage_artifacts(run, stage_key)
 
-        # ── 自动流转到下一阶段（代理决策模式）──
+        # ── 自动流转（DAG 依赖解锁，支持并行分支）──
         try:
-            wf.advance_stage(run_id)
+            wf.unlock_next_stages(run_id)
         except wf.WorkflowError as e:
             logger.error(f"workflow {run_id}: 流转失败: {e}")
 
