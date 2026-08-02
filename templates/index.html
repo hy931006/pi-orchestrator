@@ -237,6 +237,126 @@
             height: 100%; border-radius: 4px; transition: width 0.5s;
         }
         .wf-stages-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+
+        /* ── Designer (canvas) ── */
+        .designer-layout {
+            display: grid;
+            grid-template-columns: 160px 1fr 280px;
+            gap: 12px;
+            height: 560px;
+        }
+        .node-palette, .canvas-wrap, .node-config {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            overflow: hidden;
+        }
+        .node-palette h3, .node-config h3 {
+            font-size: 0.85rem; margin-bottom: 10px; color: var(--text-dim);
+        }
+        .palette-item {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: grab;
+            font-size: 0.82rem;
+            text-align: center;
+            user-select: none;
+        }
+        .palette-item:hover { border-color: var(--accent); }
+        .palette-item:active { cursor: grabbing; }
+
+        .canvas-wrap { display: flex; flex-direction: column; }
+        .canvas-toolbar {
+            display: flex; align-items: center;
+            font-size: 0.75rem; color: var(--text-dim);
+            padding-bottom: 8px; border-bottom: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+        .canvas-scroll {
+            flex: 1; overflow: auto; position: relative;
+            background:
+                radial-gradient(circle, var(--border) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .canvas {
+            position: relative;
+            width: 2000px; height: 1200px;
+            transform-origin: 0 0;
+            transition: transform 0.1s;
+        }
+        .edges-svg {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .edge-path {
+            stroke: var(--accent);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 6 4;
+            pointer-events: stroke;
+        }
+        .edge-path.edge-temp { stroke: var(--yellow); stroke-dasharray: 4 4; }
+        #nodes-layer { position: relative; z-index: 2; }
+        .flow-node {
+            position: absolute;
+            width: 150px;
+            background: var(--bg-card);
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            cursor: move;
+            user-select: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .flow-node:hover { border-color: var(--accent); }
+        .flow-node.selected { border-color: var(--green); box-shadow: 0 0 0 2px rgba(63,185,80,0.2); }
+        .flow-node .node-title { font-size: 0.8rem; font-weight: 600; }
+        .flow-node .node-sub { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+        .flow-node.start-node { border-color: var(--green); }
+        .flow-node.end-node { border-color: var(--purple); }
+        .node-port {
+            position: absolute;
+            right: -7px; top: 50%;
+            width: 14px; height: 14px;
+            background: var(--accent);
+            border: 2px solid var(--bg);
+            border-radius: 50%;
+            cursor: crosshair;
+            transform: translateY(-50%);
+            z-index: 5;
+        }
+        .node-port:hover { background: var(--green); }
+        .node-port.in-port { left: -7px; right: auto; }
+
+        .node-config { overflow-y: auto; }
+        .config-field { margin-bottom: 10px; }
+        .config-field label {
+            display: block; font-size: 0.72rem; color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+        .config-field input, .config-field textarea, .config-field select {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: var(--text);
+            font-size: 0.78rem;
+            outline: none;
+        }
+        .config-field textarea { resize: vertical; min-height: 70px; font-family: monospace; }
+        .delete-node-btn {
+            width: 100%; margin-top: 6px;
+            background: var(--red); color: #fff;
+            border: none; border-radius: 4px;
+            padding: 6px; font-size: 0.78rem; cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -249,6 +369,7 @@
     <div class="tabs">
         <button class="tab active" id="tab-tasks" onclick="switchTab('tasks')">📋 任务</button>
         <button class="tab" id="tab-workflows" onclick="switchTab('workflows')">🔀 工作流</button>
+        <button class="tab" id="tab-designer" onclick="switchTab('designer')">🎨 编排器</button>
     </div>
 
     <!-- ═══════════ 任务面板 ═══════════ -->
@@ -337,6 +458,68 @@
             </div>
         </div>
         <div id="wf-list"><div class="loading">⏳ 加载中...</div></div>
+    </div>
+
+    <!-- ═══════════ 编排器面板（拖拽画布） ═══════════ -->
+    <div class="tab-panel" id="panel-designer">
+        <div class="create-form">
+            <h2>🎨 可视化编排器 <span style="font-size:0.75rem;color:var(--text-dim);font-weight:normal">— 从左侧拖入节点，连线定义依赖，保存后即可创建运行</span></h2>
+            <div class="form-row">
+                <input type="text" id="dg-name" placeholder="模板名称（必填，如 my-flow）" style="flex:1" />
+                <input type="text" id="dg-desc" placeholder="描述（可选）" style="flex:2" />
+                <button onclick="saveDesignerTemplate()">💾 保存模板</button>
+                <button class="ghost" onclick="clearCanvas()">🗑 清空画布</button>
+            </div>
+        </div>
+
+        <div class="designer-layout">
+            <!-- 节点面板 -->
+            <div class="node-palette" id="node-palette">
+                <h3>节点</h3>
+                <div class="palette-item" draggable="true" data-type="agent" ondragstart="paletteDrag(event)">
+                    🤖 LLM 阶段
+                </div>
+                <div class="palette-item" draggable="true" data-type="start" ondragstart="paletteDrag(event)">
+                    🚀 开始
+                </div>
+                <div class="palette-item" draggable="true" data-type="end" ondragstart="paletteDrag(event)">
+                    🏁 结束
+                </div>
+                <div style="margin-top:16px;font-size:0.72rem;color:var(--text-dim);line-height:1.8;">
+                    操作提示:<br/>
+                    🖱 拖拽节点到画布<br/>
+                    🔗 从节点右侧圆点拖出连线<br/>
+                    📐 点击节点编辑配置<br/>
+                    🗑 选中节点按 Delete 删除
+                </div>
+            </div>
+
+            <!-- 画布 -->
+            <div class="canvas-wrap">
+                <div class="canvas-toolbar">
+                    <span>画布（拖拽平移 · 滚轮缩放）</span>
+                    <span style="margin-left:auto;display:flex;gap:6px;">
+                        <button class="small" onclick="zoomCanvas(1.1)">➕</button>
+                        <button class="small" onclick="zoomCanvas(0.9)">➖</button>
+                        <button class="small" onclick="zoomCanvas(1)">1:1</button>
+                    </span>
+                </div>
+                <div class="canvas-scroll" id="canvas-scroll">
+                    <div class="canvas" id="canvas" onclick="canvasClick(event)">
+                        <svg class="edges-svg" id="edges-svg"></svg>
+                        <div id="nodes-layer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 配置面板 -->
+            <div class="node-config" id="node-config">
+                <h3 id="config-title">节点配置</h3>
+                <div id="config-body" style="font-size:0.8rem;color:var(--text-dim);">
+                    点击画布中的节点进行配置
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -832,6 +1015,362 @@
                     alert('创建失败: ' + (err.detail || res.status));
                 }
             } catch(e) { alert('请求失败: ' + e.message); }
+        }
+
+        // ════════════════════════════════════
+        // 编排器（拖拽画布）
+        // ════════════════════════════════════
+        let designerNodes = [];   // {id, type, label, system_prompt, required_artifacts, x, y}
+        let designerEdges = [];   // {from, to}
+        let selectedNodeId = null;
+        let canvasZoom = 1;
+        let nodeIdSeq = 1;
+        let tempEdge = null;      // {from, x, y} 正在拖出的连线
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            if (name === 'workflows') {
+                loadTemplates();
+                loadWorkflows();
+            }
+            if (name === 'designer') {
+                loadDesignerTemplateList();
+            }
+        }
+
+        function paletteDrag(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.type);
+        }
+
+        function canvasClick(e) {
+            if (e.target === document.getElementById('canvas') ||
+                e.target === document.getElementById('nodes-layer') ||
+                e.target === document.getElementById('edges-svg')) {
+                selectedNodeId = null;
+                renderDesigner();
+                showNodeConfig(null);
+            }
+        }
+
+        // 画布接受节点拖放
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('canvas');
+            canvas.addEventListener('dragover', e => e.preventDefault());
+            canvas.addEventListener('drop', e => {
+                e.preventDefault();
+                const type = e.dataTransfer.getData('text/plain') || 'agent';
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / canvasZoom;
+                const y = (e.clientY - rect.top) / canvasZoom;
+                addDesignerNode(type, x - 75, y - 30);
+            });
+        });
+
+        function addDesignerNode(type, x, y) {
+            const id = 'n' + (nodeIdSeq++);
+            const node = {
+                id,
+                type,
+                x: Math.max(10, x), y: Math.max(10, y),
+                label: type === 'start' ? '开始' : type === 'end' ? '结束' : '阶段 ' + nodeIdSeq,
+                system_prompt: '你是执行该阶段的专家。完成本阶段任务并产出成果文件。',
+                required_artifacts: ['*.md'],
+            };
+            designerNodes.push(node);
+            renderDesigner();
+            selectedNodeId = id;
+            showNodeConfig(node);
+        }
+
+        function renderDesigner() {
+            const layer = document.getElementById('nodes-layer');
+            layer.innerHTML = designerNodes.map(n => {
+                const cls = n.type === 'start' ? 'start-node' : n.type === 'end' ? 'end-node' : '';
+                const icon = n.type === 'start' ? '🚀' : n.type === 'end' ? '🏁' : '🤖';
+                return `
+                <div class="flow-node ${cls} ${n.id === selectedNodeId ? 'selected' : ''}"
+                     id="node-${n.id}"
+                     style="left:${n.x}px;top:${n.y}px;"
+                     onmousedown="nodeDragStart(event, '${n.id}')"
+                     onclick="event.stopPropagation(); selectNode('${n.id}')">
+                    <div class="node-title">${icon} ${esc(n.label)}</div>
+                    <div class="node-sub">${esc(n.id)} · ${esc(n.type)}</div>
+                    ${n.type === 'agent' || n.type === 'start' ? `
+                    <div class="node-port" title="拖出连线"
+                         onmousedown="edgeStart(event, '${n.id}')"
+                         onmouseup="edgeEnd(event, '${n.id}')"></div>` : ''}
+                    <div class="node-port in-port" style="display:none;"></div>
+                </div>`;
+            }).join('');
+            renderEdges();
+        }
+
+        function renderEdges() {
+            const svg = document.getElementById('edges-svg');
+            const paths = designerEdges.map(e => {
+                const from = designerNodes.find(n => n.id === e.from);
+                const to = designerNodes.find(n => n.id === e.to);
+                if (!from || !to) return '';
+                const x1 = from.x + 150, y1 = from.y + 25;
+                const x2 = to.x, y2 = to.y + 25;
+                const mx = (x1 + x2) / 2;
+                return `<path class="edge-path" d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" />`;
+            });
+            if (tempEdge) {
+                const from = designerNodes.find(n => n.id === tempEdge.from);
+                if (from) {
+                    const x1 = from.x + 150, y1 = from.y + 25;
+                    paths.push(`<path class="edge-path edge-temp" d="M ${x1} ${y1} C ${(x1+tempEdge.x)/2} ${y1}, ${(x1+tempEdge.x)/2} ${tempEdge.y}, ${tempEdge.x} ${tempEdge.y}" />`);
+                }
+            }
+            svg.innerHTML = paths.join('');
+        }
+
+        function nodeDragStart(e, id) {
+            e.preventDefault();
+            const node = designerNodes.find(n => n.id === id);
+            if (!node) return;
+            selectedNodeId = id;
+            renderDesigner();
+            showNodeConfig(node);
+            const startX = e.clientX, startY = e.clientY;
+            const origX = node.x, origY = node.y;
+            function onMove(ev) {
+                node.x = origX + (ev.clientX - startX) / canvasZoom;
+                node.y = origY + (ev.clientY - startY) / canvasZoom;
+                const el = document.getElementById('node-' + id);
+                if (el) { el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; }
+                renderEdges();
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        }
+
+        function selectNode(id) {
+            selectedNodeId = id;
+            renderDesigner();
+            const node = designerNodes.find(n => n.id === id);
+            showNodeConfig(node);
+        }
+
+        // ── 连线 ──
+        function edgeStart(e, id) {
+            e.stopPropagation();
+            e.preventDefault();
+            const canvas = document.getElementById('canvas');
+            const rect = canvas.getBoundingClientRect();
+            tempEdge = {from: id, x: e.clientX - rect.left, y: e.clientY - rect.top};
+            renderEdges();
+            function onMove(ev) {
+                if (!tempEdge) return;
+                tempEdge.x = ev.clientX - rect.left;
+                tempEdge.y = ev.clientY - rect.top;
+                renderEdges();
+            }
+            function onUp(ev) {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                if (!tempEdge) return;
+                // 检查是否落在某节点上
+                const target = designerNodes.find(n => {
+                    const el = document.getElementById('node-' + n.id);
+                    if (!el) return false;
+                    const r = el.getBoundingClientRect();
+                    return ev.clientX >= r.left && ev.clientX <= r.right &&
+                           ev.clientY >= r.top && ev.clientY <= r.bottom;
+                });
+                if (target && target.id !== tempEdge.from) {
+                    // 去重
+                    if (!designerEdges.some(x => x.from === tempEdge.from && x.to === target.id)) {
+                        designerEdges.push({from: tempEdge.from, to: target.id});
+                    }
+                }
+                tempEdge = null;
+                renderEdges();
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        }
+
+        function edgeEnd(e, id) {
+            // mouseup 已在 edgeStart 的 onUp 处理，此函数仅防止冒泡
+        }
+
+        // ── 缩放 ──
+        function zoomCanvas(factor) {
+            canvasZoom = Math.min(2, Math.max(0.5, canvasZoom * factor));
+            document.getElementById('canvas').style.transform = `scale(${canvasZoom})`;
+        }
+
+        // ── 配置面板 ──
+        function showNodeConfig(node) {
+            const title = document.getElementById('config-title');
+            const body = document.getElementById('config-body');
+            if (!node) {
+                title.textContent = '节点配置';
+                body.innerHTML = '<div style="color:var(--text-dim);">点击画布中的节点进行配置</div>';
+                return;
+            }
+            title.textContent = '节点: ' + node.label;
+            body.innerHTML = `
+                <div class="config-field">
+                    <label>节点 ID（key）</label>
+                    <input value="${esc(node.id)}" disabled />
+                </div>
+                <div class="config-field">
+                    <label>名称</label>
+                    <input id="cfg-label" value="${esc(node.label)}" onchange="updateNodeConfig('label', this.value)" />
+                </div>
+                <div class="config-field">
+                    <label>类型</label>
+                    <select id="cfg-type" onchange="updateNodeConfig('type', this.value)">
+                        <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>🤖 LLM 阶段</option>
+                        <option value="start" ${node.type === 'start' ? 'selected' : ''}>🚀 开始</option>
+                        <option value="end" ${node.type === 'end' ? 'selected' : ''}>🏁 结束</option>
+                    </select>
+                </div>
+                ${node.type === 'agent' || node.type === 'start' ? `
+                <div class="config-field">
+                    <label>System Prompt（任务指令）</label>
+                    <textarea id="cfg-prompt" onchange="updateNodeConfig('system_prompt', this.value)">${esc(node.system_prompt)}</textarea>
+                </div>
+                <div class="config-field">
+                    <label>产出文件 glob（逗号分隔）</label>
+                    <input id="cfg-artifacts" value="${esc((node.required_artifacts || []).join(','))}" onchange="updateNodeConfig('required_artifacts', this.value.split(',').map(s=>s.trim()).filter(Boolean))" />
+                </div>` : ''}
+                <div class="config-field" style="margin-top:14px;">
+                    <label>依赖（来自其他节点）</label>
+                    <div style="font-size:0.75rem;color:var(--text-dim);">
+                        ${designerEdges.filter(e => e.to === node.id).map(e => '← ' + e.from).join('<br/>') || '（无，从左侧圆点拖出连线到本节点）'}
+                    </div>
+                </div>
+                <button class="delete-node-btn" onclick="deleteSelectedNode()">🗑 删除节点</button>
+            `;
+        }
+
+        function updateNodeConfig(field, value) {
+            const node = designerNodes.find(n => n.id === selectedNodeId);
+            if (!node) return;
+            node[field] = value;
+            renderDesigner();
+            showNodeConfig(node);
+        }
+
+        function deleteSelectedNode() {
+            if (!selectedNodeId) return;
+            designerNodes = designerNodes.filter(n => n.id !== selectedNodeId);
+            designerEdges = designerEdges.filter(e => e.from !== selectedNodeId && e.to !== selectedNodeId);
+            selectedNodeId = null;
+            renderDesigner();
+            showNodeConfig(null);
+        }
+
+        function clearCanvas() {
+            if (!confirm('确定清空画布？')) return;
+            designerNodes = [];
+            designerEdges = [];
+            selectedNodeId = null;
+            renderDesigner();
+            showNodeConfig(null);
+        }
+
+        // 键盘删除
+        document.addEventListener('keydown', e => {
+            if (document.getElementById('panel-designer').classList.contains('active') &&
+                (e.key === 'Delete' || e.key === 'Backspace') &&
+                !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+                deleteSelectedNode();
+            }
+        });
+
+        // ── 保存 / 加载模板 ──
+        async function saveDesignerTemplate() {
+            const name = document.getElementById('dg-name').value.trim();
+            if (!name) { alert('请输入模板名称'); return; }
+            if (designerNodes.length === 0) { alert('画布为空，先添加节点'); return; }
+            // 校验：结束节点必须有入边
+            const endNodes = designerNodes.filter(n => n.type === 'end');
+            for (const en of endNodes) {
+                if (!designerEdges.some(e => e.to === en.id)) {
+                    alert(`结束节点 ${en.label} 没有输入连线`);
+                    return;
+                }
+            }
+            const desc = document.getElementById('dg-desc').value.trim();
+            const nodes = designerNodes.map(n => ({
+                key: n.id, label: n.label, type: n.type,
+                system_prompt: n.system_prompt, required_artifacts: n.required_artifacts,
+                x: Math.round(n.x), y: Math.round(n.y),
+            }));
+            const edges = designerEdges.map(e => ({from: e.from, to: e.to}));
+            try {
+                const res = await fetch('/api/workflow-templates', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, description: desc, nodes, edges})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`✅ 模板 ${name} 已保存（${data.stages} 个阶段）\n现在可以到「工作流」标签创建运行`);
+                    loadDesignerTemplateList();
+                } else {
+                    const err = await res.json();
+                    alert('保存失败: ' + (err.detail || res.status));
+                }
+            } catch(e) { alert('请求失败: ' + e.message); }
+        }
+
+        async function loadDesignerTemplateList() {
+            try {
+                const res = await fetch('/api/workflows/templates');
+                const data = await res.json();
+                const names = (data.templates || []).map(t => t.name);
+                const palette = document.getElementById('node-palette');
+                // 在提示下方加模板列表
+                let existing = document.getElementById('dg-template-list');
+                if (!existing) {
+                    existing = document.createElement('div');
+                    existing.id = 'dg-template-list';
+                    existing.style.cssText = 'margin-top:14px;border-top:1px solid var(--border);padding-top:10px;';
+                    palette.appendChild(existing);
+                }
+                existing.innerHTML = '<h3 style="font-size:0.78rem;color:var(--text-dim);margin-bottom:6px;">已保存模板</h3>' +
+                    names.map(n => `<div style="font-size:0.75rem;padding:4px 6px;cursor:pointer;border-radius:4px;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='transparent'" onclick="loadDesignerTemplate('${esc(n)}')">📄 ${esc(n)}</div>`).join('') ||
+                    '<div style="font-size:0.72rem;color:var(--text-dim);">暂无</div>';
+            } catch(e) {}
+        }
+
+        async function loadDesignerTemplate(name) {
+            try {
+                const res = await fetch(`/api/workflow-templates/${name}`);
+                if (!res.ok) return;
+                const t = await res.json();
+                document.getElementById('dg-name').value = t.name;
+                document.getElementById('dg-desc').value = t.description || '';
+                // 转换 stages → nodes/edges
+                designerNodes = (t.stages || []).map(s => ({
+                    id: s.key, type: (s.canvas && s.canvas.type) || 'agent',
+                    label: s.label, x: (s.canvas && s.canvas.x) || 100,
+                    y: (s.canvas && s.canvas.y) || 100,
+                    system_prompt: s.agent.system_prompt,
+                    required_artifacts: s.required_artifacts,
+                }));
+                designerEdges = [];
+                (t.stages || []).forEach(s => {
+                    (s.depends_on || []).forEach(d => designerEdges.push({from: d, to: s.key}));
+                });
+                nodeIdSeq = Math.max(...designerNodes.map(n => parseInt(n.id.replace(/\D/g, '')) || 0), 0) + 1;
+                selectedNodeId = null;
+                renderDesigner();
+                showNodeConfig(null);
+            } catch(e) { alert('加载失败: ' + e.message); }
         }
 
         // ════════════════════════════════════

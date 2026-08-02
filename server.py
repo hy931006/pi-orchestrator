@@ -246,6 +246,76 @@ class CreateWorkflowRequest(BaseModel):
     repo_path: str = ""
 
 
+class TemplateSaveRequest(BaseModel):
+    """可视化画布模板（nodes + edges DAG）"""
+    name: str
+    description: str = ""
+    nodes: list = []   # [{id, key, label, type, system_prompt, required_artifacts, x, y}]
+    edges: list = []   # [{from, to}]
+
+
+def _template_to_stages(name: str, nodes: list, edges: list) -> list:
+    """画布 nodes+edges → workflow stages（depends_on 推导）
+
+    edges: from → to 表示 to 依赖 from。
+    """
+    if not nodes:
+        raise HTTPException(status_code=400, detail="模板至少需要 1 个节点")
+    stages = []
+    for n in nodes:
+        nid = n.get("key") or n.get("id")
+        if not nid:
+            raise HTTPException(status_code=400, detail="节点缺少 key")
+        stages.append({
+            "key": str(nid),
+            "label": n.get("label") or str(nid),
+            "index": nodes.index(n),
+            "depends_on": [],
+            "agent": {"model": n.get("model", ""),
+                      "system_prompt": n.get("system_prompt", "执行该阶段任务并产出成果。")},
+            "required_artifacts": n.get("required_artifacts") or ["*.md"],
+            "context_inject": {"prior_stages": []},
+            "canvas": {"x": n.get("x", 0), "y": n.get("y", 0)},
+        })
+    for e in edges:
+        src, dst = e.get("from"), e.get("to")
+        if not src or not dst:
+            continue
+        stage = next((s for s in stages if s["key"] == dst), None)
+        if stage and src not in stage["depends_on"]:
+            stage["depends_on"].append(str(src))
+            stage["context_inject"]["prior_stages"].append(str(src))
+    return stages
+
+
+@app.post("/api/workflow-templates")
+async def save_workflow_template(req: TemplateSaveRequest):
+    """保存画布模板为 workflows/<name>.yaml"""
+    stages = _template_to_stages(req.name, req.nodes, req.edges)
+    template = {"name": req.name, "description": req.description,
+                "version": 1, "stages": stages}
+    try:
+        wf.validate_template(template)
+    except wf.WorkflowError as e:
+        raise HTTPException(status_code=400, detail=f"模板校验失败: {e}")
+    import yaml as _yaml
+    path = Path(__file__).parent / "workflows" / f"{req.name}.yaml"
+    path.write_text(_yaml.safe_dump(template, allow_unicode=True, sort_keys=False),
+                    encoding="utf-8")
+    logger.info(f"🎨 画布模板已保存: {path.name} ({len(stages)} 节点)")
+    return {"saved": path.name, "stages": len(stages)}
+
+
+@app.get("/api/workflow-templates/{name}")
+async def get_workflow_template(name: str):
+    """加载画布模板（含 canvas 坐标，供画布回显）"""
+    templates = wf.load_templates()
+    t = templates.get(name)
+    if not t:
+        raise HTTPException(status_code=404)
+    return t
+
+
 def _current_stage_task_id(run_id: str, stage_index: int):
     with db.get_db() as conn:
         row = conn.execute(
