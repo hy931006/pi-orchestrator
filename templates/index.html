@@ -944,12 +944,16 @@
                 const cls = i < (workflow && workflow.current_stage_index !== null ? workflow.current_stage_index : 0) ? 'done'
                     : (s.status === 'running' ? 'current' : '');
                 const resultPreview = s.result ? `<div class="stage-result">${esc(s.result).substring(0, 500)}</div>` : '';
+                const agentBadge = s.agent_name
+                    ? `<span class="badge badge-queued" title="绑定持久 Agent: ${esc(s.agent_name)}${s.agent_model ? ' · ' + esc(s.agent_model) : ''}">🤖 ${esc(s.agent_name)}</span>`
+                    : `<span class="badge badge-claimed" title="未绑定 Agent，使用节点内嵌 Prompt">✏️ 内嵌</span>`;
                 // 审批按钮：仅当该阶段是当前阶段且 gate 已判定
                 const isCurrent = workflow && s.stage_index === workflow.current_stage_index;
                 const showActions = isCurrent && workflow.status === 'running';
                 return `
                 <div class="stage-row ${cls}">
                     <span class="stage-name">${i+1}. ${esc(s.stage_key)}</span>
+                    ${agentBadge}
                     <span class="badge badge-${s.status} ${s.status === 'running' ? 'pulse' : ''}">${s.status}</span>
                     ${gateBadge(s.gate_status)}
                     <span class="stage-meta">${s.id ? s.id.substring(0,8) : ''}${s.session_id ? ' · session ✓' : ''}</span>

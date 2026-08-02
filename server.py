@@ -373,7 +373,20 @@ async def get_workflow_stages(run_id: str):
         tasks = conn.execute(
             "SELECT * FROM tasks WHERE workflow_run_id=? ORDER BY stage_index",
             (run_id,)).fetchall()
-    return {"stages": [dict(t) for t in tasks]}
+    stages = []
+    for t in tasks:
+        d = dict(t)
+        # agent_type → 可读名称（agent 是持久实体）
+        at = d.get("agent_type")
+        if at and at != "auto":
+            agent = db.get_agent(at)
+            d["agent_name"] = agent["name"] if agent else at
+            d["agent_model"] = agent.get("model", "") if agent else ""
+        else:
+            d["agent_name"] = ""
+            d["agent_model"] = ""
+        stages.append(d)
+    return {"stages": stages}
 
 
 @app.get("/api/workflows/{run_id}/stage/{stage_key}")
