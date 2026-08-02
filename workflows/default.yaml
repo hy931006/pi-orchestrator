@@ -1,0 +1,79 @@
+name: default
+description: 标准五阶段开发流程
+version: 1
+
+stages:
+  - key: feasibility
+    label: 可行性分析
+    index: 0
+    agent:
+      model: ""
+      system_prompt: |
+        你是可行性分析工程师。分析需求的技术可行性，产出包含现状/需求/方案对比/风险/结论的报告。
+    required_artifacts:
+      - "*-report.md"
+      - "gate-checks.yaml"
+      - "gate_check.py"
+      - "gate-result.md"
+    gate_rules: "01-feasibility/gate-checks.yaml"
+    context_inject:
+      prior_stages: []
+
+  - key: design
+    label: 详细设计
+    index: 1
+    agent:
+      model: ""
+      system_prompt: |
+        你是系统架构师。基于上游可行性分析，产出详细设计报告。
+    required_artifacts:
+      - "*-design-report.md"
+      - "*-gate-checks.yaml"
+      - "*-gate_check.py"
+      - "*-gate-result.md"
+    gate_rules: "02-design/gate-checks.yaml"
+    context_inject:
+      prior_stages: ["feasibility"]
+
+  - key: plan
+    label: 实施计划
+    index: 2
+    agent:
+      model: ""
+      system_prompt: |
+        你是实施计划工程师。基于设计报告，写出可施行的分步实施计划。
+    required_artifacts:
+      - "*-plan.md"
+      - "*-gate-checks.yaml"
+      - "*-gate_check.py"
+      - "*-gate-result.md"
+    gate_rules: "03-plan/gate-checks.yaml"
+    context_inject:
+      prior_stages: ["feasibility", "design"]
+
+  - key: implementation
+    label: 实施
+    index: 3
+    agent:
+      model: ""
+      system_prompt: |
+        你是编码实现工程师。严格按实施计划逐任务编码，TDD 方式提交。
+    required_artifacts:
+      - "*.py"
+    gate_rules: "04-implementation/gate-checks.yaml"
+    context_inject:
+      prior_stages: ["plan", "design"]
+
+  - key: qa
+    label: QA
+    index: 4
+    agent:
+      model: ""
+      system_prompt: |
+        你是 QA 工程师。执行测试套件，运行静态分析，产出 QA 报告。
+    required_artifacts:
+      - "*-qa-report.md"
+      - "*-gate-result.md"
+    gate_rules: "05-qa/gate-checks.yaml"
+    context_inject:
+      prior_stages: ["implementation"]
