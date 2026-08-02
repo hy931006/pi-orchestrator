@@ -836,6 +836,8 @@
         // ════════════════════════════════════
         // Agent 状态（轮询）
         // ════════════════════════════════════
+        // Agent 状态栏（左上角 pi/omp + daemon 状态）
+        // ════════════════════════════════════
         async function refreshAgents() {
             try {
                 const res = await fetch('/api/runtimes');
@@ -843,23 +845,29 @@
                 const bar = document.getElementById('agent-bar');
                 const agents = data.local_agents || [];
                 const runtimes = data.registered_runtimes || [];
-                const onlineCount = runtimes.filter(r => r.is_online).length;
+                const daemonOnline = runtimes.some(r => r.is_online);
                 let html = '';
                 if (agents.length === 0) {
-                    html = '<span class="agent-dot offline"></span> ⚠️ 未检测到 Pi/omp CLI';
+                    html = '<span class="agent-dot offline" title="未检测到 CLI"></span> ⚠️ 未检测到 Pi/omp CLI';
                 } else {
                     html = agents.map(a => {
                         const rt = runtimes.find(r => r.agent_type === a.name);
-                        const isOnline = rt && rt.is_online;
-                        return `<span class="agent-dot ${isOnline ? 'online' : 'offline'}"></span> ${a.name}`;
+                        const isOnline = !!(rt && rt.is_online);
+                        const dot = isOnline ? 'online' : 'offline';
+                        const tip = isOnline ? `${a.name} 已注册（daemon 运行中）`
+                            : rt ? `${a.name} 已安装，daemon 未运行`
+                                 : `${a.name} 已安装（尚未注册）`;
+                        return `<span class="agent-dot ${dot}" title="${tip}"></span> ${a.name}`;
                     }).join(' ');
                 }
-                html += ` &nbsp;|&nbsp; 🖥️ Daemon: ${onlineCount > 0 ? '🟢在线' : '🔴离线'}`;
-                bar.innerHTML = html;
+                const daemonHtml = daemonOnline
+                    ? '<span class="agent-dot online" title="daemon 心跳正常"></span> <b>Daemon: 在线</b>'
+                    : '<span class="agent-dot offline" title="daemon 未运行或心跳超时"></span> <b>Daemon: 离线</b>';
+                bar.innerHTML = `${html} &nbsp;|&nbsp; 🖥️ ${daemonHtml}`;
             } catch(e) {}
         }
         refreshAgents();
-        setInterval(refreshAgents, 15000);
+        setInterval(refreshAgents, 5000);
 
         // ════════════════════════════════════
         // 工具函数

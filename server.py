@@ -216,7 +216,17 @@ async def list_runtimes():
         path = shutil.which(binary)
         if path:
             agents.append({"name": name, "binary": binary, "path": path})
-    return {"local_agents": agents, "registered_runtimes": db.list_runtimes()}
+    # 实时离线判定：last_heartbeat 超过 2 分钟 → 视为离线（不依赖 daemon 标记）
+    runtimes = db.list_runtimes()
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    for r in runtimes:
+        try:
+            hb = datetime.strptime(r["last_heartbeat"], "%Y-%m-%d %H:%M:%S")
+            r["is_online"] = 1 if (now - hb) < timedelta(minutes=2) else 0
+        except Exception:
+            r["is_online"] = 0
+    return {"local_agents": agents, "registered_runtimes": runtimes}
 
 
 # ── Stats ──
