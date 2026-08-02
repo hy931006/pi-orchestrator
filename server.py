@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 
 import database as db
+import workflow as wf
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [server] %(levelname)s: %(message)s")
@@ -235,6 +236,148 @@ async def health():
     import shutil
     agents = sum(1 for b in ["pi", "omp"] if shutil.which(b))
     return {"status": "ok", "agents": agents}
+
+
+# ── Workflows ──
+
+class CreateWorkflowRequest(BaseModel):
+    template_name: str
+    title: str
+    repo_path: str = ""
+
+
+def _current_stage_task_id(run_id: str, stage_index: int):
+    with db.get_db() as conn:
+        row = conn.execute(
+            "SELECT id FROM tasks WHERE workflow_run_id=? AND stage_index=?",
+            (run_id, stage_index)).fetchone()
+    return row["id"] if row else None
+
+
+def _audit(task_id: str, action: str, stage: str, reason: str = ""):
+    """审计评论（设计 §14.1）"""
+    reason_part = f" reason={reason}" if reason else ""
+    db.add_comment(task_id,
+                   f"[AUDIT] 阶段流转 action={action} reviewer=user stage={stage}{reason_part}",
+                   "system")
+
+
+@app.post("/api/workflows")
+async def create_workflow(req: CreateWorkflowRequest):
+    try:
+        result = wf.create_workflow(req.template_name, req.title, req.repo_path or None)
+    except wf.WorkflowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return result
+
+
+@app.get("/api/workflows")
+async def list_workflows(status: str = Query(None)):
+    return {"workflows": db.list_workflow_runs(status=status)}
+
+
+@app.get("/api/workflows/templates")
+async def list_templates():
+    return {"templates": list(wf.load_templates().values())}
+
+
+@app.get("/api/workflows/{run_id}")
+async def get_workflow(run_id: str):
+    run = db.get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404)
+    return run
+
+
+@app.get("/api/workflows/{run_id}/stages")
+async def get_workflow_stages(run_id: str):
+    run = db.get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404)
+    with db.get_db() as conn:
+        tasks = conn.execute(
+            "SELECT * FROM tasks WHERE workflow_run_id=? ORDER BY stage_index",
+            (run_id,)).fetchall()
+    return {"stages": [dict(t) for t in tasks]}
+
+
+@app.get("/api/workflows/{run_id}/stage/{stage_key}")
+async def get_stage(run_id: str, stage_key: str):
+    with db.get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM tasks WHERE workflow_run_id=? AND stage_key=?",
+            (run_id, stage_key)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404)
+    return dict(row)
+
+
+@app.post("/api/workflows/{run_id}/approve")
+async def approve_stage(run_id: str):
+    """批准当前阶段 → 流转下一阶段"""
+    run = db.get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404)
+    task_id = _current_stage_task_id(run_id, run["current_stage_index"])
+    if task_id:
+        db.update_task_status(task_id, "completed", gate_status="approved")
+        _audit(task_id, "approve", run["current_stage"] or "")
+    try:
+        wf.advance_stage(run_id)
+    except wf.WorkflowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return db.get_workflow_run(run_id)
+
+
+@app.post("/api/workflows/{run_id}/reject")
+async def reject_stage(run_id: str, reason: str = Query("")):
+    """驳回 → 当前阶段回到 queued（resume 重做）"""
+    run = db.get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404)
+    task_id = _current_stage_task_id(run_id, run["current_stage_index"])
+    if task_id:
+        db.update_task_status(task_id, "queued", gate_status="rejected")
+        _audit(task_id, "reject", run["current_stage"] or "", reason)
+    return db.get_workflow_run(run_id)
+
+
+@app.post("/api/workflows/{run_id}/force")
+async def force_stage(run_id: str, reason: str = Query("")):
+    """强制流转（管理员语义，reason 必填）"""
+    if not reason:
+        raise HTTPException(status_code=400, detail="force 操作 reason 必填")
+    run = db.get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404)
+    task_id = _current_stage_task_id(run_id, run["current_stage_index"])
+    if task_id:
+        db.update_task_status(task_id, "completed", gate_status="forced")
+        _audit(task_id, "force", run["current_stage"] or "", reason)
+    try:
+        wf.advance_stage(run_id)
+    except wf.WorkflowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return db.get_workflow_run(run_id)
+
+
+@app.post("/api/workflows/{run_id}/waive")
+async def waive_stage(run_id: str, reason: str = Query("")):
+    """豁免当前阶段（跳过流转，reason 必填）"""
+    if not reason:
+        raise HTTPException(status_code=400, detail="waive 操作 reason 必填")
+    run = db.get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404)
+    task_id = _current_stage_task_id(run_id, run["current_stage_index"])
+    if task_id:
+        db.update_task_status(task_id, "completed", gate_status="waived")
+        _audit(task_id, "waive", run["current_stage"] or "", reason)
+    try:
+        wf.advance_stage(run_id)
+    except wf.WorkflowError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return db.get_workflow_run(run_id)
 
 
 if __name__ == "__main__":
