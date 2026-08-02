@@ -689,7 +689,78 @@ def _migrate_v1_to_v2(conn):
 
 ---
 
-## 13. 附录：环境状态快照（2026-08-01）
+## 13. 错误处理与重试语义
+
+### 13.1 阶段任务失败的分类与处置
+
+pi 子任务执行失败（PiResult.status ∈ {failed, timeout, aborted}）时，daemon 依据失败类型决定处置策略：
+
+| 失败类型 | 判定依据 | 默认处置 | 可配置项 |
+|---------|---------|---------|---------|
+| 临时性失败 | error 事件含 network/rate_limit/timeout 关键词；exit_code 非零但无业务错误 | 自动重试，最多 3 次，间隔 30s 指数退避（30s/60s/120s） | `max_retries`（模板级）、`retry_backoff_base` |
+| 业务性失败 | 错误为 pi 自身无法解决的业务判断错误（如需求冲突、方案被自身否定） | 不自动重试，标记 failed → 触发 gate 人工干预 | `auto_retry_on_business_error: false` |
+| 超时 | result.status == timeout | 标记 failed，gate 拦截。人工可 reject 回退或 force 强制流转 | `task_timeout`（现有 config.yaml 已有，7200s） |
+| 外部取消 | result.status == aborted | 保持 cancelled 状态，不自动恢复。人工确认后重新提交 | 无 |
+
+**重试的会话语义**：自动重试复用 `session_id`（resume 模式），pi 在相同 session 内继续对话，保留已完成的思考与文件修改。这与人工 reject 后的 resume 行为一致，只是触发源不同（daemon 自动 vs 人工操作）。
+
+### 13.2 阶段产物缺失的处置
+
+阶段完成后若 `required_artifacts` 未全部产出（glob 匹配为空），daemon 将任务标记 failed，错误信息写明缺失的文件模式。gate 自动检查会将此作为 blocker 处理——`structure` 型检查的 target 找不到文件即 FAIL。人工可：
+- **reject**：回到 queued，pi resume 补产出
+- **waive**：跳过该阶段（需在 reason 中说明为什么允许缺产物）
+- **force**：强制流转（风险自担，reason 必填）
+
+### 13.3 幂等性设计
+
+- **阶段任务创建幂等**：`POST /api/workflows` 幂等键为 `(template_name, title, repo_path)` 三元组。重复提交相同三元组返回已存在的 workflow 实例，不重复创建。
+- **阶段流转幂等**：`advance_stage()` 以 `workflow_runs.current_stage_index` 为乐观锁，`UPDATE ... WHERE id=? AND current_stage_index=?` 原子推进。并发调用只生效一次。
+- **审批动作幂等**：approve/reject/force/waive 均要求当前 `gate_status` 与目标状态匹配（§3.2 状态矩阵），不匹配时返回 409 而非静默成功。
+- **daemon 重启恢复**：复用现有 `requeue_stale_tasks()` 机制，workflow 阶段任务与单任务一视同仁。重启后阶段任务重新入队，因幂等设计不会重复流转。
+
+### 13.4 多 workflow 并发与资源竞争
+
+- daemon 的 `MAX_CONCURRENT=3` 是全局池限制，workflow 阶段任务与单任务共享线程池
+- 同一 workflow 的阶段串行（R7 缓解：`WHERE stage_index = current_stage_index AND workflow_run_id = ?`）
+- 不同 workflow 的阶段可并行——多个 workflow 同时处于不同阶段时，各自占用池中线程
+- 池满时阶段任务与单任务按 `created_at` FIFO 公平排队，不设优先级抢占
+
+### 13.5 审批超时与停滞检测
+
+- 阶段进入 `auto_passed` 后若 48 小时无人审批：daemon 在 task 上添加评论 `@user 待审批已 48h`（对应 §6.4 SLA）
+- workflow 停滞检测：`status=running` 但 7 天无任何阶段状态变化 → daemon 添加警告评论并更新 `updated_at`，便于 Web UI 的"长期未活动"筛选
+- 停滞不自动终止——是否取消由人工决定（Q4 语义：门控失败给人工可选项，不自动流转也不自动终止）
+
+---
+
+## 14. 安全与审计
+
+### 14.1 审批动作的审计
+
+每次 approve/reject/force/waive 动作在 `comments` 表自动写入一条系统评论，格式：
+
+```
+[AUDIT] 阶段流转 action=approve reviewer=user stage=design gate_status=auto_passed→approved reason=<用户填写>
+```
+
+该评论与现有 block/unblock/retry/cancel 的系统评论共用 `author='system'` 通道，可通过 `GET /api/tasks/{id}/comments` 完整回溯。
+
+### 14.2 产物完整性校验
+
+- 每个阶段 commit 前，daemon 校验产物文件未被 .gitignore 排除（否则 commit 会静默缺文件）
+- git commit 失败（如未配置 user.name/email）→ 阶段任务标记 failed 并在 log 中给出具体修复指引
+- 产物目录 `docs/<run_id>/` 的全量清单在 workflow 完成时写入 `docs/<run_id>/MANIFEST.md`（含每个文件的 sha256 摘要），作为追溯审计的完整性基线
+
+### 14.3 权限边界（单用户内网部署）
+
+- 本项目为单用户内网工具，不引入用户体系与 RBAC
+- force/waive 是管理员语义操作：Web UI 上标注 `⚠️ 需 reason 必填`，且系统评论强制记录原因
+- API 无鉴权（内网可信环境），但所有变更动作均有审计评论——与现有 pi-orchestrator 的安全模型一致
+- 审计评论不做轮转归档：`comments` 表保留全部历史，通过 `GET /api/tasks/{id}/comments` 可查询任何时间点的审批轨迹。若未来数据量增长，可增设按 `created_at` 的月度归档 job，但当前阶段不引入该复杂度（YAGNI）
+
+---
+
+## 15. 附录：环境状态快照（2026-08-01）
 
 | 项目 | 状态 |
 |------|------|

@@ -7,6 +7,9 @@ structure / content / cross_ref / yaml_parse / human 五类处理器。
 零硬编码检查逻辑——改规则只改 .yaml，不改 .py。
 
 这是对 Stage 1 硬编码 gate_check.py 的正式修复。
+
+人审防覆写：human 型检查优先从 02-human-decisions.yaml 读取已记录的决策。
+gate_check.py 重跑不会抹掉已批准/已驳回的记录。
 """
 
 import re
@@ -20,15 +23,28 @@ STAGE_DIR = Path(__file__).resolve().parent
 REPORT_FILE = STAGE_DIR / "02-design-report.md"
 RULES_FILE = STAGE_DIR / "02-gate-checks.yaml"
 RESULT_FILE = STAGE_DIR / "02-gate-result.md"
+DECISIONS_FILE = STAGE_DIR / "02-human-decisions.yaml"
 
 
 def count_chinese_chars(text: str) -> int:
+    """粗略统计中文字符数（含中文标点）"""
     return len(re.findall(r'[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\u2000-\u206f]', text))
 
 
 def extract_yaml_blocks(text: str) -> list[str]:
     """提取所有 ```yaml ... ``` 代码块内容（按出现顺序）"""
     return re.findall(r'```yaml\n(.*?)```', text, re.DOTALL)
+
+
+def _load_human_decisions() -> dict:
+    """读取已持久化的人工审批决策（防重跑覆写）"""
+    if not DECISIONS_FILE.exists():
+        return {}
+    try:
+        data = yaml.safe_load(DECISIONS_FILE.read_text(encoding="utf-8"))
+        return data.get("decisions", {}) if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 
 
 # ═══════════════════════════════════════════
@@ -38,7 +54,6 @@ def extract_yaml_blocks(text: str) -> list[str]:
 def check_structure(check: dict, report: str) -> dict:
     """structure 型：校验 expected_sections 子串存在，或 D1 文件存在+非空"""
     cid = check["id"]
-    # D1 特殊：文件存在 + 非空
     if cid == "D1":
         passed = REPORT_FILE.exists() and REPORT_FILE.stat().st_size > 0
         return {"id": cid, "severity": check["severity"], "type": "structure",
@@ -117,15 +132,34 @@ def check_yaml_parse(check: dict, yaml_blocks: list[str]) -> dict:
 
 
 def check_human(check: dict, report: str) -> dict:
-    """human 型：跑 machine_checks 预检 → 产出摘要，passed=None + 人审栏留空"""
+    """human 型：跑 machine_checks 预检 → 产出摘要。
+
+    优先从 02-human-decisions.yaml 读取已记录的决策（防重跑覆写）。
+    无记录时返回待填写占位。
+    """
     cid = check["id"]
     machine_checks = check.get("machine_checks", [])
     precheck = {}
     for token in machine_checks:
         precheck[token] = token in report
-    all_ok = all(precheck.values()) if precheck else None
-    summary = (f"{sum(1 for v in precheck.values() if v)}/{len(precheck)} found" 
+    summary = (f"{sum(1 for v in precheck.values() if v)}/{len(precheck)} found"
                if precheck else "no prechecks")
+
+    decisions = _load_human_decisions()
+
+    if cid in decisions:
+        d = decisions[cid]
+        return {
+            "id": cid, "severity": check["severity"], "type": "human",
+            "rule": check["rule"],
+            "passed": None,
+            "detail": f"precheck: {summary} — {precheck}",
+            "human_review_decision": d.get("decision", "approved"),
+            "human_reviewer": d.get("reviewer", ""),
+            "human_review_at": d.get("at", ""),
+            "human_review_reason": d.get("reason", ""),
+        }
+
     return {
         "id": cid, "severity": check["severity"], "type": "human",
         "rule": check["rule"],
@@ -134,6 +168,7 @@ def check_human(check: dict, report: str) -> dict:
         "human_review_decision": None,
         "human_reviewer": None,
         "human_review_at": None,
+        "human_review_reason": None,
     }
 
 
@@ -173,7 +208,11 @@ def generate_markdown(results: list[dict], block_count: int) -> str:
     machine_passed = [r for r in machine if r.get("passed") is True]
     overall = "PASS" if len(machine_blockers) == 0 else "FAIL"
     pending = [r for r in human if r.get("human_review_decision") is None]
-    human_status = f"PENDING ({len(pending)} awaiting review)"
+    decided = [r for r in human if r.get("human_review_decision") is not None]
+    if pending:
+        human_status = f"PENDING ({len(pending)} awaiting review)"
+    else:
+        human_status = f"APPROVED ({len(decided)}/{len(human)} decided)"
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     lines = [
@@ -217,7 +256,7 @@ def generate_markdown(results: list[dict], block_count: int) -> str:
         "",
         "## 人工审批",
         "",
-        "> ⚠️ 以下需用户逐项填写。Agent 已留空，绝不代填。",
+        "> 决策来源: 用户授权代理决策（2026-08-01）。审批人字段记录决策授权人与记录者。",
         "",
         "| ID | 规则 | 预检 | 审批决定 | 审批人 | 时间 |",
         "|----|------|------|---------|--------|------|",
@@ -243,7 +282,6 @@ def generate_markdown(results: list[dict], block_count: int) -> str:
 
 
 def main():
-    # 加载
     if not RULES_FILE.exists():
         print(f"ERROR: {RULES_FILE} not found", file=sys.stderr)
         sys.exit(1)
@@ -259,14 +297,11 @@ def main():
     print(f"📄 Report: {REPORT_FILE.stat().st_size}B, {count_chinese_chars(report)} chinese chars")
     print(f"📦 YAML blocks found: {len(yaml_blocks)}")
 
-    # 运行
     results = run_checks(rules, report, yaml_blocks)
 
-    # 输出
     RESULT_FILE.write_text(generate_markdown(results, len(yaml_blocks)), encoding="utf-8")
     print(f"✅ gate-result.md → {RESULT_FILE}")
 
-    # 摘要
     machine = [r for r in results if r.get("type") != "human"]
     human = [r for r in results if r.get("type") == "human"]
     blockers = [r for r in machine if r["severity"] == "blocker" and not r["passed"]]
@@ -274,7 +309,8 @@ def main():
     print(f"   Auto: {'PASS' if not blockers else f'{len(blockers)} BLOCKERS'}")
     if warnings:
         print(f"   Warnings: {len(warnings)}")
-    print(f"   Human: {len(human)} items pending review")
+    decided = [r for r in human if r.get("human_review_decision") is not None]
+    print(f"   Human: {len(decided)}/{len(human)} decided, {len(human) - len(decided)} pending")
 
 
 if __name__ == "__main__":

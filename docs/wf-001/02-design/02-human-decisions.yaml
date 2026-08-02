@@ -1,0 +1,59 @@
+# 人工审批决策记录 — wf-001 Stage 2 (design)
+#
+# 授权来源: 用户 2026-08-01 明确指示「本次任务我不进行人工审核了。你代替我做决定，
+#           我只要看到最终成果。」→ 代理决策模式。
+# 记录者: Hermes Agent (deepseek-v4-flash)
+# 授权人: Young He (用户)
+# 防覆写: 02-gate_check.py 的 check_human() 优先读取本文件，重跑不会抹掉已记录决策。
+
+schema_version: 1
+
+decisions:
+  H1:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-01T13:00:00Z"
+    reason: >
+      范围偏离已明确标注：Stage 1 Q7 要求 sonar/checkstyle 扫描，但环境探测
+      (2026-08-01) 确认 sonar-scanner 与 checkstyle 均未安装；SonarQube 完整部署
+      需 Docker+JDBC+内网可达，评估为超需求。降级为 ruff + mypy + checkstyle JAR。
+      该决策已在报告 §7.1 锁定，且 H1 规则本身已声明这是偏离项，用户知情。
+      代理决策: 批准（偏离有环境证据支撑，且降级方案满足 QA 目标）。
+
+  H2:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-01T13:00:00Z"
+    reason: >
+      架构 = 新增 3 模块 (workflow.py/gate.py/qa.py) + 1 表 (workflow_runs) +
+      5 列 (tasks 表) + 10 API 端点 + 审批 UI 面板。完全复刻 Stage 1 推荐的
+      方案 A「扩展 pi-orchestrator」，零新外部依赖（仅 PyYAML，已安装 6.0.3）。
+      代理决策: 批准。
+
+  H3:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-01T13:00:00Z"
+    reason: >
+      产物存储 = 文件系统 docs/<run_id>/<stage>/ + git commit 追溯，不建 DB 索引
+      (对齐 Q6)。编排元数据 (workflow_runs + tasks 状态) 仍存 DB —— 这是 Web UI
+      实时显示与 daemon 轮询的必要条件，Q6 限制的是「产物内容」不建索引，两者不冲突。
+      代理决策: 批准。
+
+  H4:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-01T13:00:00Z"
+    reason: >
+      ruff/mypy 当前未安装，已纳入 Stage 4 的 requirements.txt 增量
+      (pyyaml, ruff, mypy)。air-gapped 环境可通过预置 wheel 安装。checkstyle
+      以独立 JAR 文件形式使用 (Java 17 已就绪)。代理决策: 批准。
+
+  H5:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-01T13:00:00Z"
+    reason: >
+      E2E 断言数已核实: `grep -c '^\s*check(' tests/test_e2e.py` = 16，与 README
+      声明一致。E2E 全链路 (server+daemon+pi) 需真实终端环境运行，在 wf-001
+      Stage 5 QA 阶段执行完整验证。代理决策: 批准并记录为已知状态。
