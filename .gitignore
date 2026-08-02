@@ -10,3 +10,6 @@ __pycache__/
 dist/
 build/
 
+
+# Pi 项目级配置/skills（impeccable 等第三方 skill 不入库）
+.pi/
