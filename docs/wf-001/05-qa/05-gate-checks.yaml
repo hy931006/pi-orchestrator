@@ -1,0 +1,87 @@
+# 门控规则定义 — wf-001 Stage 5 (qa)
+# 检查器: 05-gate_check.py (yaml.safe_load 真解析)
+
+schema_version: 1
+
+checks:
+  # ═══════ QA 报告结构 (structure) ═══════
+  - id: Q1
+    type: structure
+    severity: blocker
+    target: 05-qa-report.md
+    rule: QA 报告四章节齐全
+    expected_sections:
+      - "测试套件"
+      - "静态扫描"
+      - "自定义规则扫描"
+      - "阻断总结"
+
+  - id: Q2
+    type: structure
+    severity: blocker
+    target: 05-qa-report.md
+    rule: 测试套件章节含全部 5 个测试文件
+    expected_sections:
+      - "test_agent.py"
+      - "test_workflow.py"
+      - "test_gate.py"
+      - "test_qa.py"
+      - "test_workflow_e2e.py"
+
+  # ═══════ QA 结论 (content) ═══════
+  - id: Q3
+    type: content
+    severity: blocker
+    target: 05-qa-report.md
+    rule: 最终判定为 PASS（无阻断项）
+    expected_tokens:
+      - "✅ PASS"
+
+  - id: Q4
+    type: content
+    severity: warning
+    target: 05-qa-report.md
+    rule: 阻断项 = 0
+    expected_tokens:
+      - "阻断项: 0"
+
+  # ═══════ 交叉引用 (cross_ref) ═══════
+  - id: Q5
+    type: cross_ref
+    severity: blocker
+    target: 05-qa-report.md
+    rule: 测试数完整（49+10+8+6+8 = 81 断言）
+    expected_tokens:
+      - "49"
+      - "10"
+      - "8"
+      - "6"
+
+  # ═══════ 自举验证 (content) ═══════
+  - id: Q6
+    type: content
+    severity: blocker
+    target: 05-qa-report.md
+    rule: wf-002 自举验证记录存在（编排器管理最小 workflow 闭环）
+    expected_tokens:
+      - "wf-002"
+      - "自举"
+
+  # ═══════ 人工审批 (human) ═══════
+  - id: H1
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "代理决策: QA 报告真实（81 断言全绿 + ruff 0 error + 自定义规则 0 阻断）"
+    machine_checks:
+      - "✅ PASS"
+      - "阻断项: 0"
+
+  - id: H2
+    type: human
+    severity: blocker
+    target: 人工
+    rule: "代理决策: 遗留项记录（真实 pi E2E 需真实终端；mypy 未安装；agent.py docstring 3 处 QA001 警告）"
+    machine_checks:
+      - "mypy"
+      - "QA001"

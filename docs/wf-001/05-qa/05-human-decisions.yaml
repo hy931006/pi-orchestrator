@@ -1,0 +1,30 @@
+# 人工审批决策记录 — wf-001 Stage 5 (qa)
+#
+# 授权来源: 用户 2026-08-01「本次任务我不进行人工审核了。你代替我做决定」
+# 记录者: Hermes Agent (deepseek-v4-flash)
+# 授权人: Young He (用户)
+
+schema_version: 1
+
+decisions:
+  H1:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-02T10:00:00Z"
+    reason: >
+      QA 报告真实可信: 81 断言全绿 (49+10+8+6+8)，ruff 0 error (All checks passed)，
+      自定义规则 0 阻断 (QA001 仅 3 处 agent.py docstring 用法示例警告)，
+      最终判定 ✅ PASS。测试数据来自实际执行 (T9 回归 + workflow E2E)。
+      代理决策: 批准。
+
+  H2:
+    decision: approved
+    reviewer: "Young He (授权代理: Hermes Agent)"
+    at: "2026-08-02T10:00:00Z"
+    reason: >
+      遗留项已明确记录并评估: (1) 真实 pi E2E 需真实终端运行 daemon
+      (Hermes background 阻断子进程 stdout 的环境限制，非代码缺陷)；
+      (2) mypy 未安装 (ruff 已覆盖静态检查，mypy 可后续补充)；
+      (3) agent.py docstring 3 处 QA001 警告为用法示例非调试残留。
+      wf-002 自举验证通过 (编排器管理 minimal workflow 全链路闭环)。
+      代理决策: 批准 — wf-001 全部五阶段完成。

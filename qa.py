@@ -80,6 +80,10 @@ def run_custom_rules(paths: list[Path], rules_file: Path) -> list[dict]:
         return findings
     rules = yaml.safe_load(rules_file.read_text(encoding="utf-8")).get("rules", [])
     for path in paths:
+        # exclude_dirs 支持：跳过指定目录（如 tests/ 的规则测试样例）
+        exclude_dirs = {"tests"}
+        if any(part in exclude_dirs for part in path.parts):
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for rule in rules:
             import fnmatch
