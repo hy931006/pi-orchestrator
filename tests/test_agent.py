@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import agent
 from agent import (
-    PiAgent, PiResult, build_pi_args, split_pi_model, filter_custom_args,
+    PiAgent, build_pi_args, split_pi_model, filter_custom_args,
     drain_pi_text_buffer, flush_pi_text_buffer, strip_pi_tool_call_markup,
     choose_pi_invocation,
 )

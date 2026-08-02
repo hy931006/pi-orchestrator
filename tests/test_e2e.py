@@ -65,7 +65,6 @@ def make_shim(dir_):
     if sys.platform == "win32":
         cmd = dir_ / "pi.cmd"
         ps1 = dir_ / "pi.ps1"
-        py = sys.executable.replace("\\", "\\\\")
         ps1.write_text(f'& "{sys.executable}" "$PSScriptRoot\\mock_pi.py" @args\nexit $LASTEXITCODE\n',
                        encoding="utf-8")
         cmd.write_text(f'@echo off\n"{sys.executable}" "%~dp0mock_pi.py" %*\n', encoding="utf-8")

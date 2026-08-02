@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-import gate
+import gate  # noqa: E402
 
 PASS, FAIL = 0, 0
 
