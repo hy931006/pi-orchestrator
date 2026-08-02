@@ -13,7 +13,6 @@ import argparse
 import signal
 import sys
 
-import uvicorn
 from uvicorn import Config, Server
 
 GRACEFUL_SHUTDOWN_SECONDS = 3
