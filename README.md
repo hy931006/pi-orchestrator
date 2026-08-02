@@ -116,6 +116,91 @@ python acceptance_test.py             # 真实 pi CLI 全链路
 
 `config.yaml`：轮询间隔、并发数、任务超时等。
 
+## 执行层抽象与 Backend 替换
+
+编排层（daemon / workflow）只依赖 `backends.create_backend()` 与 `AgentResult` 契约，
+不直接耦合具体 coding agent。默认执行层是 Pi，可无缝替换为任意 CLI coding agent。
+
+### 架构
+
+```
+编排层 (daemon.py / workflow.py)
+   │  只依赖: backends.create_backend() + AgentResult
+   ▼
+backends/  (执行层抽象)
+   ├─ base.py : AgentBackend (抽象基类) + AgentResult (统一结果契约)
+   │           + register_backend() / create_backend() (注册表/工厂)
+   ├─ echo.py : EchoBackend（演示/测试，不做真实 LLM 调用）
+   └─ agent.py: PiAgent（@register_backend("pi")，pi CLI 适配器）
+```
+
+**`AgentResult` 统一字段**（跨 backend 一致）：
+
+```
+text / thinking / tool_calls / tool_results / errors
+status (completed|failed|timeout|aborted) / exit_code / error
+session_id / duration_ms / usage
+```
+
+**`execute()` 统一签名**：
+
+```python
+execute(prompt, cwd, model, system_prompt, custom_args,
+        resume_session_id, timeout, cancel_event, on_event) -> AgentResult
+```
+
+### 替换为其他 coding agent（3 步）
+
+```python
+# 1. 实现 AgentBackend 子类（如 backends/claude_code.py）
+from backends.base import AgentBackend, AgentResult, register_backend
+
+@register_backend("claude-code")
+class ClaudeCodeBackend(AgentBackend):
+    def execute(self, prompt, cwd=None, model="", system_prompt="",
+                custom_args=None, resume_session_id="", timeout=None,
+                cancel_event=None, on_event=None) -> AgentResult:
+        r = AgentResult()
+        # ... 调用你的 CLI（如 claude -p --output-format json），
+        #     把输出填进 r.text / r.thinking / r.status 等
+        r.status = "completed"
+        return r
+```
+
+```bash
+# 2. 启动时切换（环境变量，无需改代码）
+PI_ORCHESTRATOR_BACKEND=claude-code python daemon.py
+```
+
+```python
+# 3.（可选）单元测试里直接工厂获取
+from backends import create_backend
+agent = create_backend("claude-code")
+result = agent.execute("你好")
+```
+
+### 内置 backend
+
+| 名称 | 类 | 说明 |
+|------|----|------|
+| `pi` | `agent.PiAgent` | 默认。pi CLI 全功能适配（JSON 事件流/续聊/取消/超时） |
+| `echo` | `backends.echo.EchoBackend` | 回显 prompt，验证可插拔性 & 测试用（无需真实模型） |
+
+### 行为契约（新 backend 必须遵守）
+
+- `status` 必须是 `completed` / `failed` / `timeout` / `aborted` 之一（daemon 据此写任务终态）
+- `text` 为清洗后的纯文本；`errors` 非空且非 `completed` 时任务记为失败
+- `cancel_event` 被置位时必须中止执行并返回 `status="aborted"`
+- `session_id` 返回会话标识以便 `resume_session_id` 续聊（不支持可返回空）
+- 未实现 `execute` 的子类会在调用时抛 `NotImplementedError`
+
+### 已知 backend 的配置
+
+| 环境变量 | 说明 |
+|---------|------|
+| `PI_ORCHESTRATOR_BACKEND` | 执行 backend 名（默认 `pi`） |
+| `PI_EXECUTABLE` | pi 可执行文件路径（覆盖 PATH 检测，仅 pi backend 用） |
+
 ## 已知限制
 
 - **daemon 必须在真实终端运行**（Hermes 后台会阻断子进程 stdout 捕获，pi 输出为空）。PowerShell/git-bash 窗口直接 `python daemon.py`。
