@@ -24,7 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import database as db
-from agent import PiAgent, detect_pi
+from agent import detect_pi
+from backends import create_backend, list_backends
 import gate
 import workflow as wf
 
@@ -147,11 +148,18 @@ class RuntimeManager:
 # ═══════════════════════════════════════════
 
 class TaskExecutor:
-    """执行单个 Pi 任务（在池内线程中运行）"""
+    """执行单个 Agent 任务（在池内线程中运行）
 
-    def __init__(self, pi_path: str):
-        self.pi_path = pi_path
-        self.agent = PiAgent(pi_path, timeout=TASK_TIMEOUT)
+    backend 通过工厂获取（默认 pi，可用 PI_ORCHESTRATOR_BACKEND 切换，
+    如 echo / claude-code / codex —— 见 backends/ 包）。
+    """
+
+    def __init__(self, backend_name: str = None, backend_kwargs: dict = None):
+        self.backend_name = backend_name or "pi"
+        self.agent = create_backend(self.backend_name,
+                                    **(backend_kwargs or {}),
+                                    timeout=TASK_TIMEOUT)
+        logger.info(f"🤖 执行 backend: {self.backend_name} ({type(self.agent).__name__})")
         # task_id → cancel_event，供取消轮询线程定位
         self._cancel_events: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
@@ -382,10 +390,19 @@ def main():
         logger.error(f"❌ workflow 模板加载失败，拒绝启动: {e}")
         return
 
-    pi_path = detect_pi()
-    if not pi_path:
-        logger.error("❌ Pi not found on PATH. Exiting.")
-        return
+    # ── 执行 backend 选择（默认 pi；可用 PI_ORCHESTRATOR_BACKEND 切换）──
+    import os as _os
+    backend_name = _os.environ.get("PI_ORCHESTRATOR_BACKEND", "pi")
+    logger.info(f"🤖 执行 backend: {backend_name}（可用: {list_backends()}）")
+
+    backend_kwargs = {}
+    if backend_name == "pi":
+        pi_path = detect_pi()
+        if not pi_path:
+            logger.error("❌ Pi not found on PATH. Exiting.")
+            return
+        backend_kwargs["pi_path"] = pi_path
+    # 其他 backend：不要求 pi 存在（如 echo 直接可用）
 
     # ── 僵尸任务恢复（对应 Multica reconcile：崩溃 daemon 留下的 claimed/running 重新入队）──
     stale = db.requeue_stale_tasks()  # 单 daemon 部署：恢复全部
@@ -396,10 +413,10 @@ def main():
 
     # Runtime 注册
     runtime_mgr = RuntimeManager(DAEMON_ID)
-    runtime_mgr.register("pi", pi_path)
+    runtime_mgr.register(backend_name, backend_kwargs.get("pi_path") or backend_name)
     runtime_mgr.start_heartbeat()
 
-    executor = TaskExecutor(pi_path)
+    executor = TaskExecutor(backend_name=backend_name, backend_kwargs=backend_kwargs)
     pool = ThreadPoolExecutor(max_workers=MAX_CONCURRENT, thread_name_prefix="task")
     running = True
     in_flight: dict = {}  # future → task_id

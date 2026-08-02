@@ -1,5 +1,4 @@
-"""
-Pi Agent 适配器 — 像素级复刻 Multica server/pkg/agent/pi.go
+"""Pi Agent 适配器 — 像素级复刻 Multica server/pkg/agent/pi.go
 
 对应关系:
   piBackend.Execute()          → PiAgent.execute()
@@ -19,6 +18,9 @@ Pi Agent 适配器 — 像素级复刻 Multica server/pkg/agent/pi.go
 5. text_delta 经结构化工具标记 + 控制 token 清洗后输出
 6. 超时 / 取消通过杀死进程实现（Windows 下杀进程树）
 7. error 事件 / auto_retry_end 失败 / 非零退出码 → failed
+
+抽象: PiAgent 是 AgentBackend 的一个实现（注册名 "pi"）。
+编排层通过 backends.create_backend("pi") 获取，不直接依赖本模块。
 """
 import json
 import logging
@@ -32,6 +34,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from backends.base import AgentBackend, AgentResult, register_backend
 
 logger = logging.getLogger("agent")
 
@@ -373,34 +377,17 @@ def kill_process_tree(process: subprocess.Popen):
 # PiAgent
 # ═══════════════════════════════════════════
 
-class PiResult:
-    """Pi 执行结果（对应 Go 的 Result + 流式累积状态）"""
-
-    def __init__(self):
-        self.text: str = ""            # 纯文本输出（清洗后）
-        self.thinking: str = ""        # 思考过程
-        self.tool_calls: list = []     # 工具调用记录
-        self.tool_results: list = []   # 工具调用结果
-        self.errors: list = []         # error 事件
-        # 终态: completed / failed / timeout / aborted（复刻 Go 的 finalStatus）
-        self.status: str = "pending"
-        self.exit_code: int = -1
-        self.error: str = ""
-        self.session_id: str = ""      # session 文件路径，可作为 ResumeSessionID 复用
-        self.duration_ms: int = 0
-        self.usage: dict = {}          # model → {input/output/cache_read/cache_write tokens}
-
-    @property
-    def success(self) -> bool:
-        return self.status == "completed"
+class PiResult(AgentResult):
+    """Pi 执行结果（AgentResult 的 pi 实现，字段完全兼容既有调用方）"""
 
 
-class PiAgent:
+@register_backend("pi")
+class PiAgent(AgentBackend):
     """
     Pi Agent 适配器 — 复刻 Multica 的 piBackend
 
     用法:
-        agent = PiAgent(pi_path)
+        agent = create_backend("pi", pi_path=detect_pi())
         result = agent.execute(prompt="用中文介绍你自己", cwd="/project",
                                model="anthropic/claude-sonnet-4", system_prompt="...")
         print(result.text)       # 纯文本输出
@@ -408,9 +395,11 @@ class PiAgent:
         print(result.status)     # completed / failed / timeout / aborted
     """
 
-    def __init__(self, pi_path: str, timeout: int = 7200):
-        self.pi_path = pi_path
-        self.timeout = timeout
+    def __init__(self, pi_path: str = None, timeout: int = 7200):
+        super().__init__(timeout=timeout)
+        self.pi_path = pi_path or detect_pi()
+        if not self.pi_path:
+            raise RuntimeError("pi 可执行文件未找到（PATH 或 PI_EXECUTABLE）")
         # 活跃进程注册表：token → Popen，供 cancel() 定位
         self._procs: dict = {}
         self._procs_lock = threading.Lock()
