@@ -389,7 +389,9 @@
             <div id="agent-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"></div>
             <div class="form-row">
                 <input type="text" id="agent-name" placeholder="Agent 名称" style="flex:1" />
-                <input type="text" id="agent-model" placeholder="模型 (可选，如 deepseek/deepseek-v4-flash)" style="flex:1" />
+                <select id="agent-model" style="flex:1.2;">
+                    <option value="">默认模型（pi 配置）</option>
+                </select>
                 <button onclick="createAgent()" style="flex-shrink:0">创建 Agent</button>
             </div>
             <div class="form-row">
@@ -713,6 +715,7 @@
                 list.innerHTML = agents.filter(a => a.is_active).map(a =>
                     `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;min-width:180px;">
                         <b>${esc(a.name)}</b>
+                        ${a.model ? `<div style="font-size:0.7rem;color:var(--accent);margin-top:2px;">🧠 ${esc(a.model)}</div>` : ''}
                         <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px;">${esc(a.system_prompt || '无 prompt').substring(0,60)}</div>
                         <div style="margin-top:4px;">
                             <button class="small" onclick="deleteAgent('${a.id}')">🗑</button>
@@ -1409,6 +1412,12 @@
                 const res = await fetch('/api/models');
                 const data = await res.json();
                 window.allModels = data.models || [];
+                // 填充 Agent 管理表单的模型下拉
+                const sel = document.getElementById('agent-model');
+                if (sel) {
+                    sel.innerHTML = '<option value="">默认模型（pi 配置）</option>' +
+                        window.allModels.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+                }
             } catch(e) {}
         }
         loadModels();
