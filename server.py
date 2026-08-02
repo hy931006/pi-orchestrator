@@ -298,6 +298,10 @@ def _template_to_stages(name: str, nodes: list, edges: list) -> list:
             "canvas": {"x": n.get("x", 0), "y": n.get("y", 0),
                        "type": n.get("type", "agent")},
         }
+        # ui_design 节点：顶层标记类型 + UI 目标文件
+        if n.get("type") == "ui_design":
+            stage["type"] = "ui_design"
+            stage["ui_target"] = n.get("ui_target", "")
         # agent_ref: 引用 agents 表持久实体（不内嵌 prompt）
         if n.get("agent_ref"):
             stage["agent_ref"] = str(n["agent_ref"])

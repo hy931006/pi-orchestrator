@@ -324,6 +324,7 @@
         .flow-node .node-sub { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
         .flow-node.start-node { border-color: var(--green); }
         .flow-node.end-node { border-color: var(--purple); }
+        .flow-node.ui-node { border-color: var(--orange); }
         .node-port {
             position: absolute;
             right: -7px; top: 50%;
@@ -550,6 +551,9 @@
                 <h3>节点</h3>
                 <div class="palette-item" draggable="true" data-type="agent" ondragstart="paletteDrag(event)">
                     🤖 LLM 阶段
+                </div>
+                <div class="palette-item" draggable="true" data-type="ui_design" ondragstart="paletteDrag(event)">
+                    🎨 UI 设计（impeccable）
                 </div>
                 <div class="palette-item" draggable="true" data-type="start" ondragstart="paletteDrag(event)">
                     🚀 开始
@@ -1242,11 +1246,15 @@
                 id,
                 type,
                 x: Math.max(10, x), y: Math.max(10, y),
-                label: type === 'start' ? '开始' : type === 'end' ? '结束' : '阶段 ' + nodeIdSeq,
-                system_prompt: '你是执行该阶段的专家。完成本阶段任务并产出成果文件。',
-                required_artifacts: ['*.md'],
+                label: type === 'start' ? '开始' : type === 'end' ? '结束'
+                    : type === 'ui_design' ? 'UI 设计' : '阶段 ' + nodeIdSeq,
+                system_prompt: type === 'ui_design'
+                    ? '使用 impeccable 设计系统优化 UI 布局。'
+                    : '你是执行该阶段的专家。完成本阶段任务并产出成果文件。',
+                required_artifacts: type === 'ui_design' ? ['*.html', '*.css'] : ['*.md'],
                 agent_ref: '',  // 引用 agents 表持久实体（可选）
                 model: '',      // 模型覆盖（从 pi models.json 下拉选择）
+                ui_target: '',  // ui_design 节点：目标文件/目录
             };
             designerNodes.push(node);
             renderDesigner();
@@ -1257,8 +1265,13 @@
         function renderDesigner() {
             const layer = document.getElementById('nodes-layer');
             layer.innerHTML = designerNodes.map(n => {
-                const cls = n.type === 'start' ? 'start-node' : n.type === 'end' ? 'end-node' : '';
-                const icon = n.type === 'start' ? '🚀' : n.type === 'end' ? '🏁' : '🤖';
+                const cls = n.type === 'start' ? 'start-node' : n.type === 'end' ? 'end-node'
+                    : n.type === 'ui_design' ? 'ui-node' : '';
+                const icon = n.type === 'start' ? '🚀' : n.type === 'end' ? '🏁'
+                    : n.type === 'ui_design' ? '🎨' : '🤖';
+                const sub = n.type === 'ui_design'
+                    ? (n.ui_target ? `🎯 ${esc(n.ui_target)}` : '🎯 未设目标')
+                    : `${esc(n.id)} · ${esc(n.type)}`;
                 return `
                 <div class="flow-node ${cls} ${n.id === selectedNodeId ? 'selected' : ''}"
                      id="node-${n.id}"
@@ -1266,8 +1279,8 @@
                      onmousedown="nodeDragStart(event, '${n.id}')"
                      onclick="event.stopPropagation(); selectNode('${n.id}')">
                     <div class="node-title">${icon} ${esc(n.label)}</div>
-                    <div class="node-sub">${esc(n.id)} · ${esc(n.type)}</div>
-                    ${n.type === 'agent' || n.type === 'start' ? `
+                    <div class="node-sub">${sub}</div>
+                    ${n.type === 'agent' || n.type === 'start' || n.type === 'ui_design' ? `
                     <div class="node-port" title="拖出连线"
                          onmousedown="edgeStart(event, '${n.id}')"
                          onmouseup="edgeEnd(event, '${n.id}')"></div>` : ''}
@@ -1401,10 +1414,30 @@
                     <label>类型</label>
                     <select id="cfg-type" onchange="updateNodeConfig('type', this.value)">
                         <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>🤖 LLM 阶段</option>
+                        <option value="ui_design" ${node.type === 'ui_design' ? 'selected' : ''}>🎨 UI 设计（impeccable）</option>
                         <option value="start" ${node.type === 'start' ? 'selected' : ''}>🚀 开始</option>
                         <option value="end" ${node.type === 'end' ? 'selected' : ''}>🏁 结束</option>
                     </select>
                 </div>
+                ${node.type === 'ui_design' ? `
+                <div class="config-field">
+                    <label>UI 目标（文件或目录，如 templates/index.html）</label>
+                    <input id="cfg-ui-target" value="${esc(node.ui_target || '')}" placeholder="templates/index.html" onchange="updateNodeConfig('ui_target', this.value)" />
+                    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:3px;">
+                        🎨 执行时注入 impeccable 设计指令（Operate 模式），完成后自动跑 <code>npx impeccable detect</code> 门控（反模式=0 才通过）
+                    </div>
+                </div>
+                <div class="config-field">
+                    <label>模型（可覆盖，留空 = 默认）</label>
+                    <select id="cfg-model" onchange="updateNodeConfig('model', this.value)">
+                        <option value="">— 默认 —</option>
+                        ${window.allModels.map(m => `<option value="${esc(m)}" ${node.model === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="config-field">
+                    <label>产出文件 glob（逗号分隔）</label>
+                    <input id="cfg-artifacts" value="${esc((node.required_artifacts || []).join(','))}" onchange="updateNodeConfig('required_artifacts', this.value.split(',').map(s=>s.trim()).filter(Boolean))" />
+                </div>` : ''}
                 ${node.type === 'agent' || node.type === 'start' ? `
                 <div class="config-field">
                     <label>绑定 Agent（可选，引用 Agent 管理中已定义的持久实体）</label>
@@ -1494,6 +1527,7 @@
                 system_prompt: n.system_prompt, required_artifacts: n.required_artifacts,
                 agent_ref: n.agent_ref || '',
                 model: n.model || '',
+                ui_target: n.ui_target || '',
                 x: Math.round(n.x), y: Math.round(n.y),
             }));
             const edges = designerEdges.map(e => ({from: e.from, to: e.to}));
@@ -1555,6 +1589,7 @@
                     required_artifacts: s.required_artifacts,
                     agent_ref: s.agent_ref || '',
                     model: s.agent.model || '',
+                    ui_target: s.ui_target || '',
                 }));
                 designerEdges = [];
                 stages.forEach(s => {

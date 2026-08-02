@@ -64,15 +64,20 @@ def validate_template(template: dict) -> None:
     for s in stages:
         if not s.get("required_artifacts"):
             raise WorkflowError(f"阶段 {s.get('key')} 缺少 required_artifacts")
-        # agent 绑定：agent_ref 引用 agents 表（持久实体），或内嵌 system_prompt
-        agent_ref = s.get("agent_ref")
-        if agent_ref:
-            if not db.get_agent_by_name(agent_ref):
-                raise WorkflowError(
-                    f"阶段 {s.get('key')} 引用的 agent '{agent_ref}' 不存在（先在 Agent 管理中创建）")
+        # ui_design 节点：用内置 impeccable 指令，无需 agent 绑定
+        if s.get("type") == "ui_design":
+            if not s.get("ui_target"):
+                raise WorkflowError(f"UI 设计节点 {s.get('key')} 缺少 ui_target（目标文件/目录）")
         else:
-            if not s.get("agent", {}).get("system_prompt"):
-                raise WorkflowError(f"阶段 {s.get('key')} 缺少 agent.system_prompt 或 agent_ref")
+            # agent 绑定：agent_ref 引用 agents 表（持久实体），或内嵌 system_prompt
+            agent_ref = s.get("agent_ref")
+            if agent_ref:
+                if not db.get_agent_by_name(agent_ref):
+                    raise WorkflowError(
+                        f"阶段 {s.get('key')} 引用的 agent '{agent_ref}' 不存在（先在 Agent 管理中创建）")
+            else:
+                if not s.get("agent", {}).get("system_prompt"):
+                    raise WorkflowError(f"阶段 {s.get('key')} 缺少 agent.system_prompt 或 agent_ref")
         # DAG 依赖校验：depends_on 必须指向已定义阶段，且不能自依赖
         deps = s.get("depends_on") or []
         for d in deps:
@@ -142,13 +147,47 @@ def inject_context(stage: dict, artifact_dir: str) -> str:
             lines.append("  请读取该目录下的报告文件，理解其结论和约束")
         lines.append("")
     lines.append("## 本阶段任务")
-    agent_ref = stage.get("agent_ref")
-    if agent_ref:
-        # agent 是持久实体：daemon 从 agents 表加载 system_prompt + model
-        lines.append(f"（本阶段绑定自定义 Agent: {agent_ref}，由 daemon 注入其人格与模型）")
+    if stage.get("type") == "ui_design":
+        # UI 设计节点：注入 impeccable 设计指令（.pi/skills/impeccable/）
+        ui_target = stage.get("ui_target") or "."
+        lines.append(_ui_design_instruction(ui_target))
     else:
-        lines.append(stage["agent"].get("system_prompt", ""))
+        agent_ref = stage.get("agent_ref")
+        if agent_ref:
+            # agent 是持久实体：daemon 从 agents 表加载 system_prompt + model
+            lines.append(f"（本阶段绑定自定义 Agent: {agent_ref}，由 daemon 注入其人格与模型）")
+        else:
+            lines.append(stage["agent"].get("system_prompt", ""))
     return "\n".join(lines)
+
+
+def _ui_design_instruction(target: str) -> str:
+    """UI 设计节点指令：impeccable 设计系统（Operate 模式，工具类 UI）
+
+    要求 pi 子进程调用本项目的 impeccable skill 完成设计与自检。
+    """
+    return f"""你是 award-winning 的设计总监。使用本项目已安装的 impeccable 设计技能
+（.pi/skills/impeccable/）对目标 UI 做专业设计/优化。
+
+## 目标
+- UI 目标: {target}
+- 模式: Operate（工具类应用 UI——可扫描性、一致性、专业感优先）
+
+## 执行步骤
+1. 运行 `node .pi/skills/impeccable/scripts/context.mjs --target {target}` 加载设计上下文
+2. 阅读 .pi/skills/impeccable/SKILL.md 的 Commands 表和 anti-patterns
+3. 对目标执行 impeccable audit（参考 reference/audit.md）
+4. 修复发现的问题，重点检查:
+   - 低对比度文字（WCAG AA ≥4.5:1）
+   - 过小字号（body <14px）
+   - AI 签名特征: 像素网格背景/紫蓝渐变/卡片套卡片/Inter 字体/纯黑纯灰
+   - 间距节奏与对齐一致性
+5. 用 `npx impeccable detect {target}` 验证: 反模式数应为 0
+
+## 纪律
+- 保持现有功能与 JS 依赖的 ID/class 不变，只改样式与结构微调
+- 完成后报告: 修复了哪些问题、detect 前后对比
+"""
 
 
 def _bind_stage_task(task: dict, run_id: str, stage: dict) -> None:

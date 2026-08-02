@@ -16,6 +16,7 @@ import sys
 import signal
 import json
 import logging
+import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -288,6 +289,15 @@ class TaskExecutor:
 
         # ── gate 自动检查 ──
         gate_status = "auto_passed"
+        gate_detail = {"stage": stage_key}
+        # ui_design 节点：跑 impeccable detect 做 UI 质量门控
+        if stage.get("type") == "ui_design":
+            ui_target = stage.get("ui_target") or "templates"
+            detect_passed, detect_summary = self._run_ui_detect(ui_target)
+            gate_status = "auto_passed" if detect_passed else "auto_failed"
+            gate_detail["ui_detect"] = detect_summary
+            logger.info(f"🎨 [{task['id']}] UI detect={'✅' if detect_passed else '❌'} "
+                        f"({detect_summary})")
         rules_rel = stage.get("gate_rules", "")
         if rules_rel:
             artifact_dir = Path(run["artifact_dir"]) / stage_key
@@ -299,14 +309,12 @@ class TaskExecutor:
             except gate.GateError as e:
                 gate_status = "auto_failed"
                 logger.error(f"🔒 [{task['id']}] gate 异常 → auto_failed: {e}")
-        else:
+        elif not stage.get("type") == "ui_design":
             logger.info(f"🔒 [{task['id']}] 无 gate_rules，直接 auto_passed")
 
         db.update_task_status(task["id"], "completed",
                               gate_status=gate_status,
-                              gate_result_json=json.dumps(
-                                  {"passed": gate_status == "auto_passed",
-                                   "stage": stage_key}, ensure_ascii=False))
+                              gate_result_json=json.dumps(gate_detail, ensure_ascii=False))
 
         # ── 阶段产物 git commit（设计 §5.3）──
         self._commit_stage_artifacts(run, stage_key)
@@ -316,6 +324,29 @@ class TaskExecutor:
             wf.unlock_next_stages(run_id)
         except wf.WorkflowError as e:
             logger.error(f"workflow {run_id}: 流转失败: {e}")
+
+    def _run_ui_detect(self, target: str) -> tuple:
+        """运行 npx impeccable detect 检查 UI 反模式。返回 (通过?, 摘要)"""
+        try:
+            # Windows 上 npx 是 .cmd，subprocess 需经 cmd /c 或完整路径
+            npx = shutil.which("npx") or shutil.which("npx.cmd")
+            if not npx:
+                return False, "npx 未找到（需要 Node.js）"
+            if sys.platform == "win32" and npx.lower().endswith(".cmd"):
+                cmd = ["cmd", "/c", "npx", "-y", "impeccable", "detect", target]
+            else:
+                cmd = [npx, "-y", "impeccable", "detect", target]
+            r = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=180, cwd=Path.cwd())
+            out = (r.stdout or "") + (r.stderr or "")
+            # 统计反模式数：最后一行 "N anti-patterns found." 或 0 个
+            import re as _re
+            m = _re.search(r"(\d+)\s+anti-patterns? found", out)
+            count = int(m.group(1)) if m else (0 if r.returncode == 0 else -1)
+            return count == 0, f"{count} anti-patterns"
+        except Exception as e:
+            logger.warning(f"impeccable detect 执行异常: {e}")
+            return False, f"detect 异常: {e}"
 
     def _commit_stage_artifacts(self, run: dict, stage_key: str):
         """阶段产物 commit（每个阶段一个独立 commit，Q6 追溯）"""
