@@ -208,8 +208,9 @@ def _create_stage_task(run: dict, stage: dict) -> dict:
     with db.get_db() as conn:
         conn.execute(
             "UPDATE tasks SET workflow_run_id=?, stage_key=?, stage_index=?, "
-            "gate_status='pending' WHERE id=?",
-            (run["id"], stage["key"], stage.get("index", 0), task["id"]))
+            "gate_status='pending', model=? WHERE id=?",
+            (run["id"], stage["key"], stage.get("index", 0),
+             stage.get("agent", {}).get("model", ""), task["id"]))
     return db.get_task(task["id"])
 
 

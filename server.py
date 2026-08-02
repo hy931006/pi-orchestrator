@@ -356,6 +356,34 @@ async def list_templates():
     return {"templates": list(wf.load_templates().values())}
 
 
+@app.get("/api/models")
+async def list_models():
+    """从 pi 的 models.json 读取可用模型列表（provider/model 格式）"""
+    import json as _json
+    models_path = Path.home() / ".pi" / "agent" / "models.json"
+    result = {"models": [], "providers": [], "path": str(models_path)}
+    if not models_path.exists():
+        # 兼容 omp 配置（~/.omp/agent/）
+        omp_path = Path.home() / ".omp" / "agent" / "models.json"
+        if omp_path.exists():
+            models_path = omp_path
+            result["path"] = str(omp_path)
+        else:
+            return result
+    try:
+        data = _json.loads(models_path.read_text(encoding="utf-8"))
+        providers = data.get("providers", {})
+        for pname, p in providers.items():
+            for m in p.get("models", []):
+                mid = m.get("id", "")
+                if mid:
+                    result["models"].append(f"{pname}/{mid}")
+            result["providers"].append(pname)
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 @app.get("/api/workflows/{run_id}")
 async def get_workflow(run_id: str):
     run = db.get_workflow_run(run_id)

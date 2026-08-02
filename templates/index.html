@@ -1084,6 +1084,7 @@
                 system_prompt: '你是执行该阶段的专家。完成本阶段任务并产出成果文件。',
                 required_artifacts: ['*.md'],
                 agent_ref: '',  // 引用 agents 表持久实体（可选）
+                model: '',      // 模型覆盖（从 pi models.json 下拉选择）
             };
             designerNodes.push(node);
             renderDesigner();
@@ -1258,6 +1259,14 @@
                 <div class="config-field">
                     <label>产出文件 glob（逗号分隔）</label>
                     <input id="cfg-artifacts" value="${esc((node.required_artifacts || []).join(','))}" onchange="updateNodeConfig('required_artifacts', this.value.split(',').map(s=>s.trim()).filter(Boolean))" />
+                </div>
+                <div class="config-field">
+                    <label>模型（可覆盖，留空 = Agent/默认模型）</label>
+                    <select id="cfg-model" onchange="updateNodeConfig('model', this.value)">
+                        <option value="">— 默认（Agent 或 pi 默认）—</option>
+                        ${window.allModels.map(m => `<option value="${esc(m)}" ${node.model === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+                    </select>
+                    ${window.allModels.length === 0 ? '<div style="font-size:0.7rem;color:var(--yellow);margin-top:3px;">⚠️ 未读取到 pi models.json（~/.pi/agent/models.json）</div>' : ''}
                 </div>` : ''}
                 <div class="config-field" style="margin-top:14px;">
                     <label>依赖（来自其他节点）</label>
@@ -1322,6 +1331,7 @@
                 key: n.id, label: n.label, type: n.type,
                 system_prompt: n.system_prompt, required_artifacts: n.required_artifacts,
                 agent_ref: n.agent_ref || '',
+                model: n.model || '',
                 x: Math.round(n.x), y: Math.round(n.y),
             }));
             const edges = designerEdges.map(e => ({from: e.from, to: e.to}));
@@ -1377,6 +1387,7 @@
                     system_prompt: s.agent.system_prompt,
                     required_artifacts: s.required_artifacts,
                     agent_ref: s.agent_ref || '',
+                    model: s.agent.model || '',
                 }));
                 designerEdges = [];
                 (t.stages || []).forEach(s => {
@@ -1392,6 +1403,15 @@
         // ════════════════════════════════════
         // 初始化
         // ════════════════════════════════════
+        window.allModels = [];
+        async function loadModels() {
+            try {
+                const res = await fetch('/api/models');
+                const data = await res.json();
+                window.allModels = data.models || [];
+            } catch(e) {}
+        }
+        loadModels();
         loadAgents();
     </script>
 </body>
