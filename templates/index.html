@@ -457,6 +457,97 @@
             border-radius: 5px; font-size: 0.75rem; color: #92400e;
         }
 
+        /* ── 对话面板（Hermes Desktop 式） ── */
+        .chat-wrap {
+            display: flex; flex-direction: column;
+            height: calc(100vh - 160px);
+            min-height: 420px;
+            max-width: 860px;
+            margin: 0 auto;
+        }
+        .chat-messages {
+            flex: 1; overflow-y: auto;
+            padding: 8px 4px;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .chat-bubble {
+            max-width: 82%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            word-break: break-word;
+        }
+        .chat-bubble.bot {
+            align-self: flex-start;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            border-top-left-radius: 4px;
+        }
+        .chat-bubble.user {
+            align-self: flex-end;
+            background: var(--accent);
+            color: #fff;
+            border-top-right-radius: 4px;
+        }
+        .chat-bubble code {
+            background: rgba(0,0,0,0.07);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+        }
+        .chat-bubble.user code { background: rgba(255,255,255,0.2); }
+        .bubble-author {
+            font-size: 0.72rem; color: var(--text-dim);
+            margin-bottom: 4px; font-weight: 600;
+        }
+        .bubble-result {
+            margin-top: 8px; padding: 10px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+        .bubble-result .ok { color: var(--green); font-weight: 600; }
+        .bubble-result .err { color: var(--red); font-weight: 600; }
+        .bubble-result table { border-collapse: collapse; margin-top: 6px; font-size: 0.78rem; }
+        .bubble-result td { padding: 3px 10px 3px 0; }
+        .bubble-result td:first-child { color: var(--text-dim); }
+        .chat-input-row {
+            display: flex; gap: 10px;
+            padding: 14px 0 4px;
+            border-top: 1px solid var(--border);
+            margin-top: 8px;
+        }
+        .chat-input-row input {
+            flex: 1;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text);
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .chat-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .chat-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+        /* ── 设置面板（双栏） ── */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+        .settings-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
 </style>
 </head>
 <body>
@@ -467,14 +558,35 @@
 
     <!-- Tabs -->
     <div class="tabs">
-        <button class="tab active" id="tab-tasks" onclick="switchTab('tasks')">📋 任务</button>
-        <button class="tab" id="tab-workflows" onclick="switchTab('workflows')">🔀 工作流</button>
+        <button class="tab active" id="tab-chat" onclick="switchTab('chat')">💬 对话</button>
+        <button class="tab" id="tab-activity" onclick="switchTab('activity')">📋 活动</button>
         <button class="tab" id="tab-designer" onclick="switchTab('designer')">🎨 编排器</button>
-        <button class="tab" id="tab-agents" onclick="switchTab('agents')">🤖 Agent</button>
+        <button class="tab" id="tab-settings" onclick="switchTab('settings')">⚙️ 设置</button>
     </div>
 
-    <!-- ═══════════ 任务面板 ═══════════ -->
-    <div class="tab-panel active" id="panel-tasks">
+    <!-- ═══════════ 对话面板（默认，聊天式发起） ═══════════ -->
+    <div class="tab-panel active" id="panel-chat">
+        <div class="chat-wrap">
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-bubble bot">
+                    <div class="bubble-author">🤖 Pi Orchestrator</div>
+                    <div class="bubble-text">你好！用自然语言发起任务或工作流，例如：<br/>
+                        <code>跑个任务：分析一下当前项目的测试覆盖情况</code><br/>
+                        <code>创建一个 default 工作流，标题：重构登录模块</code><br/>
+                        <code>用 minimal 工作流跑：修复 README 格式</code><br/><br/>
+                        也可以输入 <code>任务</code> 或 <code>工作流</code> 查看模板，<code>help</code> 查看更多。
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" placeholder="输入指令，Enter 发送..." autocomplete="off" />
+                <button onclick="sendChat()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════ 活动面板（任务 + 工作流列表） ═══════════ -->
+    <div class="tab-panel" id="panel-activity">
         <!-- 统计面板 -->
         <div class="stats" id="stats">
             <div class="stat queued"><div class="num">-</div><div class="label">排队</div></div>
@@ -486,7 +598,42 @@
 
         <!-- Agent 管理面板（已独立为 🤖 Agent 标签页） -->
 
-        <!-- 创建任务表单 -->
+
+
+        <!-- 任务列表 -->
+        <div class="task-list-header" id="task-filter-bar">
+            <h2>📋 任务列表</h2>
+            <div class="filter-btns">
+                <button class="filter-btn active" onclick="setFilter('')">全部</button>
+                <button class="filter-btn" onclick="setFilter('queued')">排队</button>
+                <button class="filter-btn" onclick="setFilter('running')">运行中</button>
+                <button class="filter-btn" onclick="setFilter('completed')">已完成</button>
+                <button class="filter-btn" onclick="setFilter('failed')">失败</button>
+                <button class="filter-btn" onclick="setFilter('blocked')">阻塞</button>
+                <button class="filter-btn" onclick="setFilter('cancelled')">已取消</button>
+            </div>
+        </div>
+        <div id="task-list"><div class="loading">⏳ 加载中...</div></div>
+
+        <!-- 工作流列表 -->
+        <div class="task-list-header" id="wf-filter-bar">
+            <h2>🔀 工作流列表</h2>
+            <div class="filter-btns">
+                <button class="filter-btn active" onclick="setWfFilter('')">全部</button>
+                <button class="filter-btn" onclick="setWfFilter('running')">运行中</button>
+                <button class="filter-btn" onclick="setWfFilter('completed')">已完成</button>
+                <button class="filter-btn" onclick="setWfFilter('failed')">失败</button>
+            </div>
+        </div>
+        <div id="wf-list"><div class="loading">⏳ 加载中...</div></div>
+    </div>
+
+    <!-- ═══════════ 设置面板（Agent / 新建 / 模板） ═══════════ -->
+    <div class="tab-panel" id="panel-settings">
+        <div class="settings-grid">
+            <div>
+                <!-- 新建任务表单（原任务面板） -->
+                        <!-- 创建任务表单 -->
         <div class="create-form">
             <h2>📝 新建任务</h2>
             <div class="form-row">
@@ -504,25 +651,9 @@
             </div>
         </div>
 
-        <!-- 任务列表 -->
-        <div class="task-list-header">
-            <h2>📋 任务列表</h2>
-            <div class="filter-btns">
-                <button class="filter-btn active" onclick="setFilter('')">全部</button>
-                <button class="filter-btn" onclick="setFilter('queued')">排队</button>
-                <button class="filter-btn" onclick="setFilter('running')">运行中</button>
-                <button class="filter-btn" onclick="setFilter('completed')">已完成</button>
-                <button class="filter-btn" onclick="setFilter('failed')">失败</button>
-                <button class="filter-btn" onclick="setFilter('blocked')">阻塞</button>
-                <button class="filter-btn" onclick="setFilter('cancelled')">已取消</button>
-            </div>
-        </div>
-        <div id="task-list"><div class="loading">⏳ 加载中...</div></div>
-    </div>
 
-    <!-- ═══════════ Workflows 面板 ═══════════ -->
-    <div class="tab-panel" id="panel-workflows">
-        <!-- 创建 workflow 表单 -->
+                <!-- 新建工作流表单（原工作流面板） -->
+                        <!-- 创建 workflow 表单 -->
         <div class="create-form">
             <h2>🔀 新建工作流</h2>
             <div class="form-row">
@@ -536,21 +667,11 @@
             <div class="form-row" id="wf-template-desc" style="font-size:0.85rem;color:var(--text-dim);margin:0;"></div>
         </div>
 
-        <!-- workflow 列表 -->
-        <div class="task-list-header">
-            <h2>🔀 工作流列表</h2>
-            <div class="filter-btns">
-                <button class="filter-btn active" onclick="setWfFilter('')">全部</button>
-                <button class="filter-btn" onclick="setWfFilter('running')">运行中</button>
-                <button class="filter-btn" onclick="setWfFilter('completed')">已完成</button>
-                <button class="filter-btn" onclick="setWfFilter('failed')">失败</button>
-            </div>
-        </div>
-        <div id="wf-list"><div class="loading">⏳ 加载中...</div></div>
-    </div>
 
-    <!-- ═══════════ Agent 管理面板（独立标签页） ═══════════ -->
-    <div class="tab-panel" id="panel-agents">
+            </div>
+            <div>
+                <!-- Agent 管理（原 Agent 面板） -->
+    <div class="settings-section" id="panel-agents">
         <!-- 创建 Agent 表单 -->
         <div class="create-form">
             <h2>🤖 新建 Agent</h2>
@@ -578,6 +699,11 @@
             </div>
         </div>
         <div id="agent-list"><div class="loading">⏳ 加载中...</div></div>
+    </div>
+
+
+            </div>
+        </div>
     </div>
 
     <!-- ═══════════ 编排器面板（拖拽画布） ═══════════ -->
@@ -646,6 +772,20 @@
     </div>
 
     <script>
+        // 早期错误收集（调试用）
+        window.__earlyErrors = [];
+        window.addEventListener('error', function(e) {
+            window.__earlyErrors.push({
+                msg: e.message,
+                src: (e.filename || '').split('/').pop(),
+                line: e.lineno,
+                col: e.colno
+            });
+            if (window.__earlyErrors.length > 60) window.__earlyErrors = window.__earlyErrors.slice(-60);
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            window.__earlyErrors.push({msg: 'unhandledrejection: ' + (e.reason && e.reason.message || e.reason), src: '', line: 0});
+        });
         // ════════════════════════════════════
         // 状态
         // ════════════════════════════════════
@@ -684,8 +824,8 @@
             }
             renderStats(data.stats);
             renderTasks();
-            // workflow 面板也随 SSE 刷新（只刷新列表，展开详情用轮询）
-            if (document.getElementById('panel-workflows').classList.contains('active')) {
+            // workflow 列表也随 SSE 刷新（只刷新列表，展开详情用轮询）
+            if (document.getElementById('panel-activity') && document.getElementById('panel-activity').classList.contains('active')) {
                 loadWorkflows(true);
             }
         };
@@ -802,7 +942,7 @@
 
         function setFilter(status) {
             currentFilter = status;
-            document.querySelectorAll('#panel-tasks .filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#task-filter-bar .filter-btn').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
         }
 
@@ -1063,7 +1203,7 @@
 
         function setWfFilter(status) {
             currentWfFilter = status;
-            document.querySelectorAll('#panel-workflows .filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#wf-filter-bar .filter-btn').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
             loadWorkflows();
         }
@@ -1247,14 +1387,18 @@
             document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
             document.getElementById('tab-' + name).classList.add('active');
             document.getElementById('panel-' + name).classList.add('active');
-            if (name === 'workflows') {
+            if (name === 'chat') {
+                document.getElementById('chat-input').focus();
+            }
+            if (name === 'activity') {
+                renderTasks();
                 loadTemplates();
                 loadWorkflows();
             }
             if (name === 'designer') {
                 loadDesignerTemplateList();
             }
-            if (name === 'agents') {
+            if (name === 'settings') {
                 loadAgents();
             }
         }
@@ -1689,6 +1833,165 @@
             });
             return stages.map(s => positions[s.key]);
         }
+
+        // ════════════════════════════════════
+        // 对话面板（Hermes Desktop 式自然语言发起）
+        // ════════════════════════════════════
+        function chatAdd(msg, role) {
+            const box = document.getElementById('chat-messages');
+            const el = document.createElement('div');
+            el.className = 'chat-bubble ' + role;
+            el.innerHTML = msg;
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+            return el;
+        }
+
+        function chatUser(text) {
+            return chatAdd(`<div class="bubble-author">你</div>${esc(text).replace(/\n/g, '<br/>')}`, 'user');
+        }
+
+        function chatBot(html) {
+            return chatAdd(`<div class="bubble-author">🤖 Pi Orchestrator</div>${html}`, 'bot');
+        }
+
+        // 模板列表缓存（聊天解析用）
+        let chatTemplates = [];
+
+        async function refreshChatTemplates() {
+            try {
+                const res = await fetch('/api/workflows/templates');
+                const d = await res.json();
+                chatTemplates = d.templates || [];
+            } catch(e) { chatTemplates = []; }
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            chatUser(text);
+            await refreshChatTemplates();
+            await chatRoute(text);
+        }
+
+        async function chatRoute(text) {
+            const t = text.toLowerCase();
+            // ── 帮助 ──
+            if (/^(help|帮助|\?|？)$/.test(t) || t.includes('怎么用')) {
+                chatBot(`<b>支持的自然语言指令：</b><br/>
+                    <code>任务：描述</code> 或 <code>跑个任务：xxx</code> — 创建单任务<br/>
+                    <code>工作流：标题</code> / <code>用 [模板名] 工作流：标题</code> — 创建工作流<br/>
+                    <code>任务列表</code> / <code>工作流列表</code> / <code>模板列表</code> / <code>Agent列表</code><br/>
+                    <code>模板</code> — 查看可用工作流模板<br/><br/>
+                    <b>示例：</b><br/>
+                    <code>跑个任务：分析项目测试覆盖</code><br/>
+                    <code>用 default 工作流：重构登录模块</code><br/>
+                    <code>用 minimal 工作流：修复 README</code>`);
+                return;
+            }
+            // ── 查询类 ──
+            if (/任务列表|任务状态/.test(t)) {
+                chatBot('📋 任务列表已加载：'); switchTab('activity'); return;
+            }
+            if (/工作流列表/.test(t)) {
+                chatBot('🔀 工作流列表已加载：'); switchTab('activity'); return;
+            }
+            if (/模板列表|有哪些模板|^模板$/.test(t)) {
+                const names = chatTemplates.map(x => x.name);
+                chatBot(`📦 可用模板：<code>${names.join('</code> <code>')}</code>`);
+                return;
+            }
+            if (/agent列表|有哪些agent|^agent$/.test(t)) {
+                chatBot('🤖 Agent 管理在 ⚙️ 设置 中：'); switchTab('settings'); return;
+            }
+            // ── 创建工作流 ──
+            const wfMatch = /工作流|workflow/.test(t);
+            if (wfMatch) {
+                // 模板名：显式 "用 X 工作流" 或 "X 工作流"（X = 已知模板名）
+                let tmpl = '';
+                for (const x of chatTemplates) {
+                    const re = new RegExp(`(?:用|以)?\\s*${x.name}\\s*工作流`, 'i');
+                    if (re.test(text)) { tmpl = x.name; break; }
+                }
+                if (!tmpl && chatTemplates.length) tmpl = chatTemplates[0].name;
+                // 标题：冒号后 或 "标题：xxx"
+                let title = '';
+                const colon = text.split(/[：:]/);
+                if (colon.length > 1) title = colon.slice(1).join('：').trim();
+                const tmatch = text.match(/标题[：:]\s*([^\n]+)/);
+                if (tmatch) title = tmatch[1].trim();
+                if (!title) { chatBot('⚠️ 请给出工作流标题，例如：<code>用 default 工作流：重构登录模块</code>'); return; }
+                const msg = chatBot('⏳ 正在创建工作流...');
+                try {
+                    const res = await fetch('/api/workflows', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({template_name: tmpl, title})
+                    });
+                    const d = await res.json();
+                    if (!res.ok) { msg.innerHTML = `<div class="bubble-author">🤖 Pi Orchestrator</div><div class="bubble-result"><span class="err">❌ ${esc(d.detail || '创建失败')}</span></div>`; return; }
+                    const run = d.run;
+                    const stages = (run.stage_keys || []).length
+                        ? run.stage_keys.join(' → ') : '见活动页';
+                    msg.innerHTML = `<div class="bubble-author">🤖 Pi Orchestrator</div>
+                        <div class="bubble-result">
+                            <span class="ok">✅ 工作流已创建</span>
+                            <table>
+                                <tr><td>ID</td><td><code>${esc(run.id)}</code></td></tr>
+                                <tr><td>模板</td><td>${esc(tmpl)}</td></tr>
+                                <tr><td>标题</td><td>${esc(title)}</td></tr>
+                                <tr><td>状态</td><td>${esc(run.status)} · 当前阶段: ${esc(run.current_stage || '—')}</td></tr>
+                            </table>
+                            <div class="chat-actions"><button class="small" onclick="switchTab('activity')">📋 查看活动</button></div>
+                        </div>`;
+                    loadWorkflows();
+                } catch(e) {
+                    msg.innerHTML = `<div class="bubble-author">🤖 Pi Orchestrator</div><div class="bubble-result"><span class="err">❌ ${esc(e.message)}</span></div>`;
+                }
+                return;
+            }
+            // ── 创建任务 ──
+            if (/任务|task/.test(t)) {
+                let title = '对话任务', desc = text;
+                const colon = text.split(/[：:]/);
+                if (colon.length > 1) {
+                    title = colon[0].replace(/跑个|创建|新建|一个|任务/g, '').trim() || '对话任务';
+                    desc = colon.slice(1).join('：').trim();
+                }
+                if (!desc) desc = title;
+                const msg = chatBot('⏳ 正在创建任务...');
+                try {
+                    const res = await fetch('/api/tasks', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({title, description: desc, agent_type: 'auto'})
+                    });
+                    const d = await res.json();
+                    if (!res.ok) { msg.innerHTML = `<div class="bubble-author">🤖 Pi Orchestrator</div><div class="bubble-result"><span class="err">❌ ${esc(d.detail || '创建失败')}</span></div>`; return; }
+                    msg.innerHTML = `<div class="bubble-author">🤖 Pi Orchestrator</div>
+                        <div class="bubble-result">
+                            <span class="ok">✅ 任务已创建</span>
+                            <table>
+                                <tr><td>ID</td><td><code>${esc(d.id)}</code></td></tr>
+                                <tr><td>标题</td><td>${esc(title)}</td></tr>
+                                <tr><td>状态</td><td>${esc(d.status)}</td></tr>
+                            </table>
+                            <div class="chat-actions"><button class="small" onclick="switchTab('activity')">📋 查看活动</button></div>
+                        </div>`;
+                    renderTasks();
+                } catch(e) {
+                    msg.innerHTML = `<div class="bubble-author">🤖 Pi Orchestrator</div><div class="bubble-result"><span class="err">❌ ${esc(e.message)}</span></div>`;
+                }
+                return;
+            }
+            // ── 未识别 ──
+            chatBot(`🤔 没理解「${esc(text)}」。试试 <code>help</code> 查看支持的指令，或用自然语言描述任务/工作流。`);
+        }
+
+        // Enter 发送
+        document.getElementById('chat-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') sendChat();
+        });
 
         // ════════════════════════════════════
         // 初始化
