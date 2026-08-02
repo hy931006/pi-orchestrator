@@ -91,6 +91,7 @@ def init_db():
             INSERT OR IGNORE INTO daemon_state (id, is_running) VALUES (1, 1);
         """)
         _migrate_tasks(conn)
+        _migrate_v1_to_v2(conn)
 
 
 def _migrate_tasks(conn):
@@ -104,6 +105,87 @@ def _migrate_tasks(conn):
     for col, ddl in migrations.items():
         if col not in existing:
             conn.execute(ddl)
+
+
+def _migrate_v1_to_v2(conn):
+    """v1 → v2: workflow 编排层迁移（纯增补，零数据风险）"""
+    existing_tables = {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "workflow_runs" not in existing_tables:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS workflow_runs (
+                id TEXT PRIMARY KEY,
+                template_name TEXT NOT NULL,
+                title TEXT NOT NULL,
+                repo_path TEXT,
+                branch TEXT,
+                status TEXT NOT NULL DEFAULT 'running',
+                current_stage TEXT,
+                current_stage_index INTEGER DEFAULT 0,
+                artifact_dir TEXT,
+                created_at TEXT DEFAULT (datetime('now','localtime')),
+                updated_at TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+    for col, ddl in [
+        ("workflow_run_id", "ALTER TABLE tasks ADD COLUMN workflow_run_id TEXT"),
+        ("stage_key", "ALTER TABLE tasks ADD COLUMN stage_key TEXT"),
+        ("stage_index", "ALTER TABLE tasks ADD COLUMN stage_index INTEGER"),
+        ("gate_status", "ALTER TABLE tasks ADD COLUMN gate_status TEXT"),
+        ("gate_result_json", "ALTER TABLE tasks ADD COLUMN gate_result_json TEXT"),
+    ]:
+        if col not in existing_cols:
+            conn.execute(ddl)
+
+
+# ────────────────────────────────
+# Workflow Runs CRUD
+# ────────────────────────────────
+
+def create_workflow_run(template_name: str, title: str, repo_path: str = None) -> dict:
+    """创建 workflow 实例"""
+    run_id = uuid.uuid4().hex[:12]
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO workflow_runs (id, template_name, title, repo_path, artifact_dir) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (run_id, template_name, title, repo_path or str(Path.cwd()),
+             f"docs/{run_id}"))
+    return get_workflow_run(run_id)
+
+
+def get_workflow_run(run_id: str) -> Optional[dict]:
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM workflow_runs WHERE id = ?", (run_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_workflow_runs(status: str = None, limit: int = 50) -> list[dict]:
+    with get_db() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM workflow_runs WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+                (status, limit)).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM workflow_runs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_workflow_run(run_id: str, **kwargs):
+    allowed = {"status", "current_stage", "current_stage_index", "branch"}
+    fields, values = [], []
+    for k, v in kwargs.items():
+        if k in allowed:
+            fields.append(f"{k} = ?")
+            values.append(v)
+    if not fields:
+        return
+    fields.append("updated_at = datetime('now','localtime')")
+    values.append(run_id)
+    with get_db() as conn:
+        conn.execute(f"UPDATE workflow_runs SET {', '.join(fields)} WHERE id = ?", values)
 
 
 # ────────────────────────────────
@@ -167,7 +249,8 @@ def update_task_status(task_id: str, status: str, **kwargs):
     fields = ["status = ?", "updated_at = datetime('now','localtime')"]
     values = [status]
 
-    for key in ('log', 'result', 'worktree_path', 'session_id'):
+    for key in ('log', 'result', 'worktree_path', 'session_id',
+                'gate_status', 'gate_result_json'):
         if key in kwargs:
             fields.append(f"{key} = ?")
             values.append(kwargs[key])
