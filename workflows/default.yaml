@@ -1,15 +1,15 @@
 name: default
-description: 标准五阶段开发流程
-version: 1
+description: 标准五阶段开发流程（绑定预设 Agent）
+version: 2
 
 stages:
   - key: feasibility
     label: 可行性分析
     index: 0
+    agent_ref: 可行性分析师
     agent:
       model: ""
-      system_prompt: |
-        你是可行性分析工程师。分析需求的技术可行性，产出包含现状/需求/方案对比/风险/结论的报告。
+      system_prompt: ""
     required_artifacts:
       - "*-report.md"
       - "gate-checks.yaml"
@@ -22,10 +22,10 @@ stages:
   - key: design
     label: 详细设计
     index: 1
+    agent_ref: 系统架构师
     agent:
       model: ""
-      system_prompt: |
-        你是系统架构师。基于上游可行性分析，产出详细设计报告。
+      system_prompt: ""
     required_artifacts:
       - "*-design-report.md"
       - "*-gate-checks.yaml"
@@ -38,10 +38,10 @@ stages:
   - key: plan
     label: 实施计划
     index: 2
+    agent_ref: 实施计划师
     agent:
       model: ""
-      system_prompt: |
-        你是实施计划工程师。基于设计报告，写出可施行的分步实施计划。
+      system_prompt: ""
     required_artifacts:
       - "*-plan.md"
       - "*-gate-checks.yaml"
@@ -54,10 +54,10 @@ stages:
   - key: implementation
     label: 实施
     index: 3
+    agent_ref: 编码工程师
     agent:
       model: ""
-      system_prompt: |
-        你是编码实现工程师。严格按实施计划逐任务编码，TDD 方式提交。
+      system_prompt: ""
     required_artifacts:
       - "*.py"
     gate_rules: "04-implementation/gate-checks.yaml"
@@ -67,10 +67,10 @@ stages:
   - key: qa
     label: QA
     index: 4
+    agent_ref: QA工程师
     agent:
       model: ""
-      system_prompt: |
-        你是 QA 工程师。执行测试套件，运行静态分析，产出 QA 报告。
+      system_prompt: ""
     required_artifacts:
       - "*-qa-report.md"
       - "*-gate-result.md"
