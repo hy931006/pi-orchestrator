@@ -282,9 +282,9 @@ def _create_stage_task(run: dict, stage: dict, repair_for: str = None) -> dict:
     with db.get_db() as conn:
         conn.execute(
             "UPDATE tasks SET workflow_run_id=?, stage_key=?, stage_index=?, "
-            "gate_status='pending', model=? WHERE id=?",
+            "gate_status='pending', model=?, repair_for=? WHERE id=?",
             (run["id"], stage["key"], stage.get("index", 0),
-             stage.get("agent", {}).get("model", ""), task["id"]))
+             stage.get("agent", {}).get("model", ""), repair_for, task["id"]))
     return db.get_task(task["id"])
 
 
@@ -376,10 +376,11 @@ def route_gate_failure(run: dict, failed_task: dict, template: dict) -> Optional
 
     with _UNLOCK_LOCK:
         with db.get_db() as conn:
+            # 共享 repair 节点：同一 (repair节点, 父阶段) 组合才复用任务
             row = conn.execute(
                 "SELECT * FROM tasks WHERE workflow_run_id=? AND stage_key=? "
-                "ORDER BY created_at DESC LIMIT 1",
-                (run["id"], repair_key)).fetchone()
+                "AND repair_for=? ORDER BY created_at DESC LIMIT 1",
+                (run["id"], repair_key, stage_key)).fetchone()
             if row and row["status"] in ("queued", "running", "claimed"):
                 return dict(row)  # 修复任务已在队列/执行中（并发防护）
             if row and (row["repair_count"] or 0) >= max_repairs:
@@ -404,10 +405,16 @@ def handle_repair_result(run: dict, repair_task: dict, template: dict, passed: b
     - 'retry'     修复未过：repair_count+1 且未达上限，任务已重置回 queued 重试
     - 'exhausted' 修复未过且达上限：停在当前状态，等人工处置
     """
-    parent = repair_parent(template, repair_task["stage_key"])
+    parent = None
+    # 共享 repair 节点：父阶段以任务上的 repair_for 为准（路由时写入）
+    parent_key = repair_task.get("repair_for")
+    if parent_key:
+        parent = next((s for s in template["stages"] if s["key"] == parent_key), None)
+    if not parent:
+        parent = repair_parent(template, repair_task["stage_key"])  # 兼容旧数据
     if not parent:
         raise WorkflowError(
-            f"repair 节点 {repair_task['stage_key']} 无父阶段（模板中无 on_gate_fail 指向它）")
+            f"repair 节点 {repair_task['stage_key']} 无父阶段（无 repair_for 且无 on_gate_fail 指向）")
 
     if passed:
         with db.get_db() as conn:

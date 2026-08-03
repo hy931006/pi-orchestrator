@@ -297,7 +297,14 @@ class TaskExecutor:
         # repair 节点重开时 stage_index 可能错位——以 stage_key 为准找定义
         stage = next((s for s in stages if s["key"] == stage_key), stage)
         is_repair = stage.get("type") == "repair"
-        parent = wf.repair_parent(template, stage_key) if is_repair else None
+        # 共享 repair 节点：父阶段以任务上的 repair_for 为准，兜底模板扫描
+        parent = None
+        if is_repair:
+            pkey = task.get("repair_for")
+            if pkey:
+                parent = next((s for s in stages if s["key"] == pkey), None)
+            if not parent:
+                parent = wf.repair_parent(template, stage_key)
 
         # ── gate 自动检查 ──
         gate_status = "auto_passed"

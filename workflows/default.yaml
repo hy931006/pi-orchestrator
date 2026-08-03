@@ -16,6 +16,7 @@ stages:
       - "gate_check.py"
       - "gate-result.md"
     gate_rules: "01-feasibility/gate-checks.yaml"
+    on_gate_fail: repair
     context_inject:
       prior_stages: []
 
@@ -32,6 +33,7 @@ stages:
       - "*-gate_check.py"
       - "*-gate-result.md"
     gate_rules: "02-design/gate-checks.yaml"
+    on_gate_fail: repair
     context_inject:
       prior_stages: ["feasibility"]
 
@@ -48,6 +50,7 @@ stages:
       - "*-gate_check.py"
       - "*-gate-result.md"
     gate_rules: "03-plan/gate-checks.yaml"
+    on_gate_fail: repair
     context_inject:
       prior_stages: ["feasibility", "design"]
 
@@ -61,6 +64,7 @@ stages:
     required_artifacts:
       - "*.py"
     gate_rules: "04-implementation/gate-checks.yaml"
+    on_gate_fail: repair
     context_inject:
       prior_stages: ["plan", "design"]
 
@@ -75,5 +79,28 @@ stages:
       - "*-qa-report.md"
       - "*-gate-result.md"
     gate_rules: "05-qa/gate-checks.yaml"
+    on_gate_fail: repair
     context_inject:
       prior_stages: ["implementation"]
+
+  # ── 通用 repair 节点：任一主线阶段 gate 失败时路由至此 ──
+  # 共享节点（5 阶段共用），父阶段由任务上的 repair_for 字段区分；
+  # 后期可按阶段拆分（复制本节点 → 调 prompt → 各阶段 on_gate_fail 改指新节点）
+  - key: repair
+    label: 通用修复
+    index: 90
+    type: repair
+    agent:
+      model: ""
+      system_prompt: |
+        你是修复工程师。上游阶段的质量门控（gate）未通过，由你修复。
+        1. 阅读「修复上下文」给出的 gate-result.md，定位未通过的检查项及原因
+        2. 在被修复阶段的产物目录中直接修复：补齐缺失章节/文件、消除 TODO/TBD 占位符、
+           修正交叉引用、修复 YAML 语法等——只做让 gate 通过的最小修复
+        3. 不要另起目录，不要推倒重写整份产物
+        4. 完成后简述：哪些检查项未通过、你分别如何修复的
+    required_artifacts:
+      - "*"
+    depends_on: []
+    context_inject:
+      prior_stages: []

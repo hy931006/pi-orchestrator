@@ -79,6 +79,33 @@ stages:
     required_artifacts: ["*.md"]
     depends_on: []
 """, encoding="utf-8")
+(TMPL_DIR / "sharedrepair.yaml").write_text("""\
+name: sharedrepair
+description: 共享 repair 节点（多父阶段）测试模板
+version: 1
+stages:
+  - key: a
+    label: 阶段A
+    index: 0
+    agent: {system_prompt: "做A"}
+    required_artifacts: ["*.md"]
+    on_gate_fail: fix
+    depends_on: []
+  - key: b
+    label: 阶段B
+    index: 1
+    agent: {system_prompt: "做B"}
+    required_artifacts: ["*.md"]
+    on_gate_fail: fix
+    depends_on: [a]
+  - key: fix
+    label: 通用修复
+    index: 90
+    type: repair
+    agent: {system_prompt: "修"}
+    required_artifacts: ["*"]
+    depends_on: []
+""", encoding="utf-8")
 wf.WORKFLOWS_DIR = TMPL_DIR
 
 
@@ -206,7 +233,38 @@ def test_all():
                                 templates["plain"])
     check("无 on_gate_fail → route None（停住等人工）", rt3 is None)
 
-    # ── 8. daemon 级端到端：真实 gate.yaml + 产物目录 ──
+    # ── 8. 共享 repair 节点：多父阶段归属（repair_for 区分）──
+    stmpl = templates["sharedrepair"]
+    sres = fresh_run("sharedrepair")
+    srun = sres["run"]
+    sa = sres["first_tasks"][0]
+    set_task(sa["id"], status="completed", gate_status="auto_failed")
+    sfix_a = wf.route_gate_failure(srun, db.get_task(sa["id"]), stmpl)
+    check("共享节点: A 失败 → repair_for=a",
+          sfix_a is not None and sfix_a.get("repair_for") == "a", str(sfix_a))
+    set_task(sfix_a["id"], status="completed", gate_status="auto_passed")
+    wf.handle_repair_result(srun, db.get_task(sfix_a["id"]), stmpl, passed=True)
+    check("共享节点: A 被标记 repaired",
+          get_stage_task(srun["id"], "a")["gate_status"] == "repaired")
+    unlocked = wf.unlock_next_stages(srun["id"])
+    check("共享节点: A repaired → b 解锁",
+          [t["stage_key"] for t in unlocked] == ["b"], str(unlocked))
+    # b 失败 → 应创建「新的」fix 任务（不与 A 的复用），repair_for=b
+    sb = get_stage_task(srun["id"], "b")
+    set_task(sb["id"], status="completed", gate_status="auto_failed")
+    sfix_b = wf.route_gate_failure(srun, db.get_task(sb["id"]), stmpl)
+    check("共享节点: b 失败 → 新建 fix 任务（不复用 A 的）",
+          sfix_b is not None and sfix_b["id"] != sfix_a["id"])
+    check("共享节点: b 的 repair_for=b", sfix_b.get("repair_for") == "b")
+    set_task(sfix_b["id"], status="completed", gate_status="auto_passed")
+    wf.handle_repair_result(srun, db.get_task(sfix_b["id"]), stmpl, passed=True)
+    check("共享节点: b 被标记 repaired（不会误标 a 以外的）",
+          get_stage_task(srun["id"], "b")["gate_status"] == "repaired")
+    wf.unlock_next_stages(srun["id"])
+    check("共享节点: 全程结束 workflow completed",
+          db.get_workflow_run(srun["id"])["status"] == "completed")
+
+    # ── 9. daemon 级端到端：真实 gate.yaml + 产物目录 ──
     cwd = os.getcwd()
     tmpcwd = Path(tempfile.mkdtemp())
     os.chdir(tmpcwd)
