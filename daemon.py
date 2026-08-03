@@ -294,21 +294,27 @@ class TaskExecutor:
         stages = template["stages"]
         stage = stages[task.get("stage_index") or 0]
         stage_key = task.get("stage_key") or stage["key"]
+        # repair 节点重开时 stage_index 可能错位——以 stage_key 为准找定义
+        stage = next((s for s in stages if s["key"] == stage_key), stage)
+        is_repair = stage.get("type") == "repair"
+        parent = wf.repair_parent(template, stage_key) if is_repair else None
 
         # ── gate 自动检查 ──
         gate_status = "auto_passed"
         gate_detail = {"stage": stage_key}
         # ui_design 节点：跑 impeccable detect 做 UI 质量门控
-        if stage.get("type") == "ui_design":
+        if not is_repair and stage.get("type") == "ui_design":
             ui_target = stage.get("ui_target") or "templates"
             detect_passed, detect_summary = self._run_ui_detect(ui_target)
             gate_status = "auto_passed" if detect_passed else "auto_failed"
             gate_detail["ui_detect"] = detect_summary
             logger.info(f"🎨 [{task['id']}] UI detect={'✅' if detect_passed else '❌'} "
                         f"({detect_summary})")
-        rules_rel = stage.get("gate_rules", "")
+        # repair 节点复用父阶段的 gate_rules + 父阶段产物目录（R1 自旋）
+        gate_src = parent if (is_repair and parent) else stage
+        rules_rel = gate_src.get("gate_rules", "")
         if rules_rel:
-            artifact_dir = Path(run["artifact_dir"]) / stage_key
+            artifact_dir = Path(run["artifact_dir"]) / gate_src["key"]
             rules_path = Path(run["artifact_dir"]) / rules_rel
             try:
                 passed, md = gate.run_gate(rules_path, artifact_dir)
@@ -317,7 +323,7 @@ class TaskExecutor:
             except gate.GateError as e:
                 gate_status = "auto_failed"
                 logger.error(f"🔒 [{task['id']}] gate 异常 → auto_failed: {e}")
-        elif not stage.get("type") == "ui_design":
+        elif not is_repair and not stage.get("type") == "ui_design":
             logger.info(f"🔒 [{task['id']}] 无 gate_rules，直接 auto_passed")
 
         db.update_task_status(task["id"], "completed",
@@ -326,6 +332,22 @@ class TaskExecutor:
 
         # ── 阶段产物 git commit（设计 §5.3）──
         self._commit_stage_artifacts(run, stage_key)
+
+        # ── repair 节点：结果路由（通过→回补父阶段+流转；未过→重试/转人工）──
+        if is_repair:
+            action = wf.handle_repair_result(run, db.get_task(task["id"]), template,
+                                             passed=(gate_status == "auto_passed"))
+            if action == "unlocked":
+                wf.unlock_next_stages(run_id)
+            return
+
+        # ── 主线节点 gate 失败：repair 路由，或停住等人工（不再无条件流转）──
+        if gate_status == "auto_failed":
+            repair_task = wf.route_gate_failure(run, task, template)
+            if not repair_task:
+                logger.info(f"⏸️ [{task['id']}] gate 失败且无 repair 路由 → "
+                            f"停在 {stage_key} 等人工 (reject/force/waive)")
+            return
 
         # ── 自动流转（DAG 依赖解锁，支持并行分支）──
         try:

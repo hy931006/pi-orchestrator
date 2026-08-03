@@ -133,6 +133,7 @@ def _migrate_v1_to_v2(conn):
         ("stage_index", "ALTER TABLE tasks ADD COLUMN stage_index INTEGER"),
         ("gate_status", "ALTER TABLE tasks ADD COLUMN gate_status TEXT"),
         ("gate_result_json", "ALTER TABLE tasks ADD COLUMN gate_result_json TEXT"),
+        ("repair_count", "ALTER TABLE tasks ADD COLUMN repair_count INTEGER DEFAULT 0"),
     ]:
         if col not in existing_cols:
             conn.execute(ddl)

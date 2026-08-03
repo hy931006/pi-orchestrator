@@ -59,11 +59,11 @@ def test_all():
 
     # 5. 阶段流转（DAG 解锁：fix 完成后 → verify）
     with db.get_db() as conn:
-        conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (task["id"],))
+        conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (task["id"],))
     t2 = wf.advance_stage(run["id"])
     check("流转到 verify", t2 is not None and t2["stage_key"] == "verify", str(t2))
     with db.get_db() as conn:
-        conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (t2["id"],))
+        conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (t2["id"],))
     t3 = wf.advance_stage(run["id"])
     check("末阶段后返回 None", t3 is None)
     check("workflow 完成", db.get_workflow_run(run["id"])["status"] == "completed")
@@ -74,7 +74,7 @@ def test_all():
         row = conn.execute(
             "SELECT id FROM tasks WHERE workflow_run_id=? AND stage_key='fix'",
             (r["id"],)).fetchone()
-        conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (row["id"],))
+        conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (row["id"],))
     results = []
 
     def adv():
@@ -118,7 +118,7 @@ def test_all():
         run = db.create_workflow_run("dag-test", "dag", tempfile.mkdtemp())
         a_task = wf_mod._create_stage_task(run, dag["stages"][0])
         with db.get_db() as conn:
-            conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (a_task["id"],))
+            conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (a_task["id"],))
             conn.execute("UPDATE workflow_runs SET current_stage='A', current_stage_index=0 WHERE id=?",
                          (run["id"],))
         # A 完成后 → B、C 同时解锁
@@ -128,20 +128,20 @@ def test_all():
         # B 完成 → D 还不能解锁（C 未完成）
         b_id = next(t["id"] for t in unlocked if t["stage_key"] == "B")
         with db.get_db() as conn:
-            conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (b_id,))
+            conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (b_id,))
         unlocked2 = wf_mod.unlock_next_stages(run["id"])
         check("B 完成时 D 不提前解锁（等 C）", unlocked2 == [], str([t["stage_key"] for t in unlocked2]))
         # C 完成 → D 解锁
         c_id = next(t["id"] for t in unlocked if t["stage_key"] == "C")
         with db.get_db() as conn:
-            conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (c_id,))
+            conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (c_id,))
         unlocked3 = wf_mod.unlock_next_stages(run["id"])
         check("B+C 完成后 D 解锁", [t["stage_key"] for t in unlocked3] == ["D"],
               str([t["stage_key"] for t in unlocked3]))
         # D 完成 → workflow completed
         d_id = unlocked3[0]["id"]
         with db.get_db() as conn:
-            conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (d_id,))
+            conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (d_id,))
         wf_mod.unlock_next_stages(run["id"])
         check("全部完成后 workflow completed",
               db.get_workflow_run(run["id"])["status"] == "completed")
@@ -187,7 +187,7 @@ def test_all():
         check("agent_ref 阶段绑定 Agent id", s1_task["agent_type"] == my_agent["id"],
               s1_task["agent_type"])
         with db.get_db() as conn:
-            conn.execute("UPDATE tasks SET status='completed' WHERE id=?", (s1_task["id"],))
+            conn.execute("UPDATE tasks SET status='completed', gate_status='auto_passed' WHERE id=?", (s1_task["id"],))
         s2_task = wf_mod.advance_stage(res["run"]["id"])
         check("内嵌 prompt 阶段 agent=auto", s2_task["agent_type"] == "auto",
               s2_task["agent_type"])

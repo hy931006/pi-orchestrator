@@ -46,7 +46,8 @@ python daemon.py            # 任务调度器
 
 - **五阶段模板**：可行性分析 → 详细设计 → 实施计划 → 实施 → QA（`workflows/default.yaml`）
 - **DAG 执行引擎**：`depends_on` 依赖解锁，支持并行分支（A→B∥C→D），环检测，线程安全幂等
-- **门控流转**：每阶段完成后自动跑 gate（机器检查）→ 人工审批（批准/驳回/强制/豁免，理由必填审计）
+- **门控流转**：每阶段完成后自动跑 gate（机器检查）→ **gate 不过即阻断主线**（不再无条件放行）；人工审批（批准/驳回/强制/豁免，理由必填审计）
+- **Repair 分支（条件路由）**：阶段可配 `on_gate_fail: <repair节点>` + `max_repairs: N`（默认 2）。gate 失败自动路由到 `type: repair` 的 LLM 节点——注入 gate-result.md 上下文，复用父阶段 gate_rules 自旋复检；通过则父阶段标记 `repaired` 并解锁下游，N 次未过转人工。repair 节点不作入口、不参与正常解锁、不计入完成条件
 - **产物追溯**：每阶段独立 git commit，`docs/<run_id>/` 完整链路
 - **阶段详情**：状态徽章 + gate 徽章 + 绑定 Agent 徽章 + 结果预览
 
