@@ -708,6 +708,49 @@
         ::-webkit-scrollbar-thumb { background: rgba(23,23,26,0.16); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(23,23,26,0.28); }
         ::-webkit-scrollbar-track { background: transparent; }
+
+        /* ── 看板（活动面板） ── */
+        #panel-activity > * { max-width: none; }
+        .kanban {
+            display: flex; gap: 12px;
+            align-items: flex-start;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+        .kanban-col {
+            flex: 1 1 0;
+            min-width: 200px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-faint);
+            border-radius: var(--radius);
+            padding: 10px;
+        }
+        .kanban-wf .kanban-col { max-width: 460px; }
+        .kanban-col-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);
+            padding: 2px 4px 10px;
+        }
+        .kanban-count {
+            font-size: 0.72rem; font-weight: 500; color: var(--text-dim);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0 8px;
+            min-width: 22px; text-align: center;
+        }
+        .kanban-empty {
+            text-align: center; color: var(--text-dim);
+            font-size: 0.75rem; padding: 18px 0; opacity: 0.6;
+        }
+        .kanban-col .task-card, .kanban-col .wf-card {
+            margin-bottom: 8px;
+            padding: 10px 12px;
+            box-shadow: var(--shadow-sm);
+        }
+        .kanban-col .task-card:last-child, .kanban-col .wf-card:last-child { margin-bottom: 0; }
+        .kanban-col .task-card .header, .kanban-col .wf-card .header { flex-wrap: wrap; }
+        .kanban-col .task-card .title, .kanban-col .wf-card .title { font-size: 0.82rem; }
 </style>
 </head>
 <body>
@@ -767,32 +810,51 @@
 
 
 
-        <!-- 任务列表 -->
-        <div class="task-list-header" id="task-filter-bar">
-            <h2>📋 任务列表</h2>
-            <div class="filter-btns">
-                <button class="filter-btn active" onclick="setFilter('')">全部</button>
-                <button class="filter-btn" onclick="setFilter('queued')">排队</button>
-                <button class="filter-btn" onclick="setFilter('running')">运行中</button>
-                <button class="filter-btn" onclick="setFilter('completed')">已完成</button>
-                <button class="filter-btn" onclick="setFilter('failed')">失败</button>
-                <button class="filter-btn" onclick="setFilter('blocked')">阻塞</button>
-                <button class="filter-btn" onclick="setFilter('cancelled')">已取消</button>
+        <!-- 任务看板 -->
+        <div class="task-list-header">
+            <h2>📋 任务看板</h2>
+        </div>
+        <div class="kanban" id="task-kanban">
+            <div class="kanban-col">
+                <div class="kanban-col-header">⏳ 排队 <span class="kanban-count" id="count-queued">0</span></div>
+                <div class="kanban-col-body" id="col-queued"></div>
+            </div>
+            <div class="kanban-col">
+                <div class="kanban-col-header">⚡ 进行中 <span class="kanban-count" id="count-running">0</span></div>
+                <div class="kanban-col-body" id="col-running"></div>
+            </div>
+            <div class="kanban-col">
+                <div class="kanban-col-header">✅ 已完成 <span class="kanban-count" id="count-completed">0</span></div>
+                <div class="kanban-col-body" id="col-completed"></div>
+            </div>
+            <div class="kanban-col">
+                <div class="kanban-col-header">⛔ 失败·阻塞 <span class="kanban-count" id="count-failed">0</span></div>
+                <div class="kanban-col-body" id="col-failed"></div>
+            </div>
+            <div class="kanban-col">
+                <div class="kanban-col-header">🚫 已取消 <span class="kanban-count" id="count-cancelled">0</span></div>
+                <div class="kanban-col-body" id="col-cancelled"></div>
             </div>
         </div>
-        <div id="task-list"><div class="loading">⏳ 加载中...</div></div>
 
-        <!-- 工作流列表 -->
-        <div class="task-list-header" id="wf-filter-bar">
-            <h2>🔀 工作流列表</h2>
-            <div class="filter-btns">
-                <button class="filter-btn active" onclick="setWfFilter('')">全部</button>
-                <button class="filter-btn" onclick="setWfFilter('running')">运行中</button>
-                <button class="filter-btn" onclick="setWfFilter('completed')">已完成</button>
-                <button class="filter-btn" onclick="setWfFilter('failed')">失败</button>
+        <!-- 工作流看板 -->
+        <div class="task-list-header" style="margin-top:24px">
+            <h2>🔀 工作流看板</h2>
+        </div>
+        <div class="kanban kanban-wf" id="wf-kanban">
+            <div class="kanban-col">
+                <div class="kanban-col-header">⚡ 进行中 <span class="kanban-count" id="count-wf-running">0</span></div>
+                <div class="kanban-col-body" id="col-wf-running"></div>
+            </div>
+            <div class="kanban-col">
+                <div class="kanban-col-header">✅ 已完成 <span class="kanban-count" id="count-wf-completed">0</span></div>
+                <div class="kanban-col-body" id="col-wf-completed"></div>
+            </div>
+            <div class="kanban-col">
+                <div class="kanban-col-header">⛔ 失败 <span class="kanban-count" id="count-wf-failed">0</span></div>
+                <div class="kanban-col-body" id="col-wf-failed"></div>
             </div>
         </div>
-        <div id="wf-list"><div class="loading">⏳ 加载中...</div></div>
     </div>
 
     <!-- ═══════════ 设置面板（Agent / 新建 / 模板） ═══════════ -->
@@ -1069,13 +1131,16 @@
             document.querySelector('.stat.blocked .num').textContent = stats.blocked;
         }
 
-        function renderTasks() {
-            const container = document.getElementById('task-list');
-            if (tasks.length === 0) {
-                container.innerHTML = '<div class="empty"><div class="icon">📭</div>暂无任务</div>';
-                return;
-            }
-            container.innerHTML = tasks.map(t => `
+        // 看板列定义：queued / running(+claimed) / completed / failed(+blocked) / cancelled
+        const TASK_COLUMNS = [
+            {id: 'queued',    match: t => t.status === 'queued'},
+            {id: 'running',   match: t => t.status === 'running' || t.status === 'claimed'},
+            {id: 'completed', match: t => t.status === 'completed'},
+            {id: 'failed',    match: t => t.status === 'failed' || t.status === 'blocked'},
+            {id: 'cancelled', match: t => t.status === 'cancelled'},
+        ];
+        function taskCardHtml(t) {
+            return `
                 <div class="task-card${expandedTasks.has(t.id) ? ' expanded' : ''}" id="task-${t.id}" onclick="toggleTask('${t.id}')">
                     <div class="header">
                         <div>
@@ -1086,7 +1151,7 @@
                                 ${t.worktree_path ? ' · ' + t.worktree_path.split('/').pop() : ''}
                             </div>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <span class="badge badge-${t.status} ${t.status === 'running' ? 'pulse' : ''}">${t.status}</span>
                             ${gateBadge(t.gate_status)}
                             <div class="task-actions" onclick="event.stopPropagation()">
@@ -1100,8 +1165,19 @@
                     </div>
                     <div class="log-preview" id="log-${t.id}">${t.log ? esc(t.log) : '<em>等待执行...</em>'}</div>
                     <div class="comments-section" id="comments-${t.id}" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;"></div>
-                </div>
-            `).join('');
+                </div>`;
+        }
+        function renderTasks() {
+            TASK_COLUMNS.forEach(col => {
+                const body = document.getElementById('col-' + col.id);
+                if (!body) return;
+                const items = tasks.filter(col.match);
+                const countEl = document.getElementById('count-' + col.id);
+                if (countEl) countEl.textContent = items.length;
+                body.innerHTML = items.length
+                    ? items.map(taskCardHtml).join('')
+                    : '<div class="kanban-empty">— 空 —</div>';
+            });
         }
 
         function toggleTask(taskId) {
@@ -1384,15 +1460,15 @@
             loadWorkflows();
         }
 
-        function renderWorkflows() {
-            const container = document.getElementById('wf-list');
-            if (workflows.length === 0) {
-                container.innerHTML = '<div class="empty"><div class="icon">🔀</div>暂无工作流，先创建一个吧</div>';
-                return;
-            }
-            container.innerHTML = workflows.map(w => {
-                const expanded = expandedWfs.has(w.id);
-                return `
+        // 工作流看板列：running / completed / failed(+cancelled)
+        const WF_COLUMNS = [
+            {id: 'running',   match: w => w.status === 'running'},
+            {id: 'completed', match: w => w.status === 'completed'},
+            {id: 'failed',    match: w => w.status === 'failed' || w.status === 'cancelled'},
+        ];
+        function wfCardHtml(w) {
+            const expanded = expandedWfs.has(w.id);
+            return `
                 <div class="wf-card${expanded ? ' expanded' : ''}" id="wf-${w.id}" onclick="toggleWf('${w.id}')">
                     <div class="header">
                         <div>
@@ -1402,7 +1478,7 @@
                                 ${w.branch ? ' · ' + esc(w.branch) : ''}
                             </div>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <span class="badge badge-wf-${w.status} ${w.status === 'running' ? 'pulse' : ''}">${w.status}</span>
                             ${w.current_stage ? `<span class="badge badge-queued">📍 ${esc(w.current_stage)}</span>` : ''}
                         </div>
@@ -1417,7 +1493,18 @@
                         </div>
                     </div>
                 </div>`;
-            }).join('');
+        }
+        function renderWorkflows() {
+            WF_COLUMNS.forEach(col => {
+                const body = document.getElementById('col-wf-' + col.id);
+                if (!body) return;
+                const items = workflows.filter(col.match);
+                const countEl = document.getElementById('count-wf-' + col.id);
+                if (countEl) countEl.textContent = items.length;
+                body.innerHTML = items.length
+                    ? items.map(wfCardHtml).join('')
+                    : '<div class="kanban-empty">— 空 —</div>';
+            });
             // 为展开项加载阶段
             expandedWfs.forEach(runId => loadWfStages(runId, true));
         }
